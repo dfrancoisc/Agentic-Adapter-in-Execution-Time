@@ -32,6 +32,76 @@ Ready to load: `examples/Demo/HL7EnrichProduction.cls`.
 
 ---
 
+## Why these hosts exist
+
+Worth being explicit, because one of them is essential and one is a choice.
+
+### The IRIS mental model
+
+Four kinds of thing, with fixed roles:
+
+| | Role | Can it modify a message in flight? |
+|---|---|---|
+| Business Service | Gets data into the production | No — it creates the message |
+| Business Process | Decides, orchestrates, holds state, calls others and waits | **Yes** |
+| Business Operation | Sends data out | No — it sends a request and returns a response |
+| Adapter | The protocol plumbing bolted onto a service or an operation | No |
+
+### Why `EnrichCodes` is essential
+
+The MCP adapter cannot change the HL7 message. It is an outbound host: it takes a
+request, calls the server, hands back a response. It never sits in the message path.
+
+But the use case needs three things done:
+
+1. Pull the ICD code out of OBX-5 — the tool wants a code, not a whole HL7 message
+2. Call the MCP operation and wait for the answer
+3. Write the SNOMED code and description back into the message, then forward it
+
+Only a business process can do all three. It is the one host type that can receive a
+message, call something else, wait, and then send a modified message onward. That is
+what `EnrichCodes` is, and there is no way to remove it from this design today.
+
+The exception is the deferred DTL work described in the technical specification.
+When a transformation can call a configured MCP item inline, the write-back happens
+in the DTL and a separate process becomes unnecessary for simple field enrichment.
+That is precisely why it is worth building.
+
+### Why `HL7Router` is optional
+
+You can delete it. Point `HL7FileIn` straight at `EnrichCodes` and the production
+still works — that is exactly what `Demo.HL7EnrichProduction` does, with four hosts
+instead of five.
+
+The router earns its place when you have more than one kind of message or more than
+one destination. In this production it does three things:
+
+- **Decides what is worth enriching.** ORU messages go to the MCP path; everything
+  else goes straight out. Enrichment costs a network round trip per coded value, so
+  an ADT should not pay for one.
+- **Validates.** `Validation="dm"` refused a malformed ADT that was missing its
+  required EVN segment. Better caught at the door than halfway through a remote call.
+- **Puts routing decisions in a rule instead of in code.** Adding a second
+  destination, or sending lab results down a different path, is a rule edit in the
+  Rule Editor — no recompile, no code review.
+
+With one message type and one destination, the router is ceremony. With three
+message types and four destinations, hardwiring the service to a process is the
+thing you will regret.
+
+### The minimum
+
+```
+HL7FileIn  →  EnrichCodes  ⇄  SnomedMCP
+                    │
+                    └──────→  HL7FileOut
+```
+
+Four hosts: get it in, do the work, call the server, send it out. `SnomedMCP` is not
+optional either — it is the adapter, and it is the whole point.
+
+---
+
 ## Settings
 
 ### HL7FileIn — `EnsLib.HL7.Service.FileService`
