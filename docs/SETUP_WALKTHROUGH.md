@@ -61,6 +61,40 @@ Turn it off before the production goes anywhere near live traffic.
 
 ## Step 4 — Add the business operation
 
+### Which host type is the adapter?
+
+**An Operation. An Outbound Host.** Not a service, and not a business process.
+
+This matters in the new Production Configuration UI, where Create asks you to pick a
+host category first, and picking Process leads to a **Process Type** dropdown —
+General, HL7, X12, Component. None of those apply here. That dropdown chooses what
+kind of business process to *generate*; it is not asking which class you have.
+
+Verified against the API the new UI calls: `hostType` takes `Service`, `Process` or
+`Operation`, and
+
+```
+GetHostSettings(ns, production, "Operation", "Agentic.Adapter.Operation", "")
+```
+
+returns the adapter's full settings list, with the class documentation as help text.
+
+| You are creating | Host category | Type |
+|---|---|---|
+| The MCP adapter itself | **Outbound Host** | class `Agentic.Adapter.Operation` |
+| A process that calls it | Process Host | `General`, or `HL7` for an HL7 router |
+| Something feeding the interface | Inbound Host | per your source |
+
+### New Production Configuration UI
+
+1. Click the caret next to **Create** and choose the **Outbound Host** option — or
+   use the **+** in the **Outbound Hosts** column.
+2. Class: `Agentic.Adapter.Operation`
+3. Name: `SnomedMCP`
+4. **Create**, then configure it in the **Host Configuration** panel on the right.
+
+### Standard UI
+
 In the **Operations** column, click **+**.
 
 | Field | Value |
@@ -217,6 +251,8 @@ do ##class(Ens.Director).StartProduction("Demo.MCPProduction")
 
 | Symptom | Cause |
 |---|---|
+| Create asks for a Process Type (General / HL7 / X12 / Component) | You are creating a business process. The adapter is an Outbound Host — see step 4 |
+| The adapter class does not appear in the class list | You are in the wrong host category. It only appears under Operation / Outbound Host |
 | `Business dispatch name 'EnsLib.Testing.Service' is not registered to run` | Testing Enabled is off — step 3 |
 | `<CLASS DOES NOT EXIST>` on start | The production class was not created or not compiled. A production is a class, not just a configuration row |
 | Operation red on start | Endpoint unreachable, or `SSLConfig` missing for an https endpoint |
