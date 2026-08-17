@@ -17,37 +17,66 @@ JSON. What to call and what to do with the answer belongs to your interface.
 
 ## Step by step — from nothing to a working call
 
-### 1. Get the code into IRIS
+### 1. Install once, for the whole instance
 
-If the source is on the same machine as IRIS:
-
-```
-zpm "load /path/to/Agentic-Adapter-in-Execution-Time"
-```
+The adapter is installed **once per instance**, into a shared database mapped to
+every namespace. You do not install it per namespace, and namespaces created later
+pick it up automatically.
 
 If IRIS is in a container and the source is on your host, copy it in first:
 
 ```
-docker cp /path/to/Agentic-Adapter-in-Execution-Time <container>:/tmp/mcpadapter
+docker cp /path/to/Agentic-Adapter-in-Execution-Time <container>:/opt/mcpadapter
 ```
 
-then, in an IRIS session in your target namespace:
+In an IRIS session, load the installer and run it:
 
 ```
-zpm "load /tmp/mcpadapter"
+do $system.OBJ.Load("/opt/mcpadapter/setup/Agentic/Install.cls","ck")
+do ##class(Agentic.Install).Setup()
 ```
 
-No IPM? Load the classes directly:
+That creates the `AGENTICLIB` database, creates the `%ALL` pseudo-namespace if the
+instance does not have one, and maps the `Agentic.Adapter` package and its routines
+into `%ALL`.
+
+Then load the module, from any namespace — the mapping puts the code in the shared
+database regardless of where you run it from:
 
 ```
-do $system.OBJ.ImportDir("/tmp/mcpadapter/src/cls","*.cls","ck",,1)
+zpm "load /opt/mcpadapter"
 ```
 
-Confirm it landed:
+No IPM? `do $system.OBJ.ImportDir("/opt/mcpadapter/src/cls","*.cls","ck",,1)`
+
+Confirm it is visible everywhere:
 
 ```
-write ##class(%Dictionary.CompiledClass).%ExistsId("Agentic.Adapter.MCP")
+do ##class(Agentic.Install).Verify()
 ```
+
+```
+              FHIR : adapter visible
+          HSCUSTOM : adapter visible
+             HSLIB : adapter visible
+             HSSYS : adapter visible
+    HSSYSLOCALTEMP : adapter visible
+             PAYER : adapter visible
+              USER : adapter visible
+```
+
+Only the **code** is shared. Message data globals are deliberately not mapped, so
+every namespace keeps its own message store and no production can see another's
+traffic.
+
+To reverse the mapping, `do ##class(Agentic.Install).Unmap()`. The database and its
+contents are left in place.
+
+#### Installing into one namespace only
+
+If you would rather not touch instance-wide configuration, skip the installer and
+just `zpm "load"` in the namespace you want. The adapter works exactly the same —
+it is simply not visible from anywhere else.
 
 ### 2. Store the credential (skip if the server needs no auth)
 
