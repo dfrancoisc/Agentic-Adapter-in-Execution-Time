@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="IRIS">
+<Document name="agentic-mcp-adapter.ZPM">
+<Module>
+  <Name>agentic-adapter-in-execution-time</Name>
+  <Version>0.1.0</Version>
+  <Description>Generic MCP (Model Context Protocol) outbound adapter for InterSystems IRIS interoperability productions.</Description>
+  <Keywords>mcp adapter interoperability production iris healthconnect</Keywords>
+  <Packaging>module</Packaging>
+  <SourcesRoot>src/cls</SourcesRoot>
+  <Resource Name="Agentic.Adapter.PKG"/>
+</Module>
+</Document>
+</Export>
