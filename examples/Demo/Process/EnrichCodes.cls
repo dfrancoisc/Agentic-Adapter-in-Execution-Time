@@ -44,6 +44,27 @@ Property AltSystemField As %String [ InitialExpression = "5.6" ];
 /// Label written into the coding system field for translated codes.
 Property TargetSystemLabel As %String [ InitialExpression = "SCT" ];
 
+/// Tell the Production Configuration diagram who this process talks to.
+///
+/// Without this, the MCP operation appears as an unconnected island. The default
+/// implementation only understands the standard `TargetConfigNames` setting, and
+/// this process reaches its targets through `MCPTarget` and `OutputTarget`, so the
+/// UI has no way to know about them. Any host that dispatches to a config item
+/// named by a custom setting has to declare it here or the drawing lies.
+ClassMethod OnGetConnections(Output pArray As %String, pItem As Ens.Config.Item)
+{
+    do ##super(.pArray, pItem)
+    for i = 1:1:pItem.Settings.Count() {
+        set tSetting = pItem.Settings.GetAt(i)
+        continue:'$isobject(tSetting)
+        ; postconditional expressions must not contain spaces - the parser ends
+        ; them at the first whitespace
+        continue:((tSetting.Name'="MCPTarget")&&(tSetting.Name'="OutputTarget"))
+        continue:(tSetting.Value="")
+        set pArray(tSetting.Value) = ""
+    }
+}
+
 Method OnRequest(pRequest As EnsLib.HL7.Message, Output pResponse As Ens.Response) As %Status
 {
     set tSC = $$$OK
