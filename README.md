@@ -149,11 +149,19 @@ BPLDemo   -> (caller)     StringResponse
 So a team that builds its interfaces graphically never has to write a line of
 ObjectScript to use an MCP server.
 
-#### Verified: calling it from inside a DTL
+#### MCPLookup — the feature for transformations and rules
 
-A transformation can call an MCP server directly, with no business process, no
-operation and no adapter. This is the simplest option and the one that gives up the
-most — read both halves before choosing it.
+An adapter has to hang off a business host; that is what an adapter is. A
+transformation is not a host, so there is no adapter shape available in that lane.
+The feature there is a **function**.
+
+| Lane | What you configure |
+|---|---|
+| Productions | `Agentic.Adapter.MCP` and `Agentic.Adapter.LLM`, on hosts |
+| Transformations and rules | `MCPLookup`, naming a configured item |
+
+Same protocol underneath — `Agentic.Adapter.Protocol` is shared — two surfaces,
+because the two lanes have different vocabularies.
 
 #### The standard way to call MCP from a DTL
 
@@ -241,10 +249,17 @@ as a plain URL:
 | A slow server | Blocks the transformation | Times out and retries per configuration |
 | Model-chosen tools | Not available | Available |
 
-The DTL route is genuinely simpler and genuinely independent — and what it buys with
-that simplicity is exactly the three things that justified building the adapter. For
-a fast, unauthenticated lookup nobody will audit, it is a fair trade. For a clinical
-interface, route it through the business process.
+Both are first-class; they answer different questions. `MCPLookup` is the right
+answer when the call belongs in the transformation — a lookup, a normalisation, a
+value you need in hand to finish mapping the message. The business process is the
+right answer when the call needs to be a traced, retryable event in its own right,
+or needs OAuth 2.
+
+What `MCPLookup` gives up is real and worth knowing before you choose it: no
+production message and so nothing in the Visual Trace, no retry or failover, and TLS
+plus basic or bearer authentication but not OAuth 2. In a clinical interface those
+usually decide it. In a transformation that normalises a units code against an
+internal service, they usually do not.
 
 There is a third shape if the one-line DTL ergonomics are what appeal: do the lookup
 in a business process *before* the transform and pass the answer in. The DTL then

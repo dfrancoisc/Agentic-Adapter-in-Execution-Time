@@ -13,7 +13,15 @@
 /// Its endpoint, TLS configuration and credential are read from that item, so the
 /// server is configured in one place and the transformation just names it.
 ///
-/// WHAT THIS IS NOT
+/// THIS IS THE FEATURE FOR THIS LANE
+///
+/// An adapter has to hang off a business host, and a transformation is not one, so
+/// there is no adapter shape available here. In a production the feature is
+/// Agentic.Adapter.MCP configured on an operation; in a DTL or a rule the feature is
+/// this function. Same protocol underneath - Agentic.Adapter.Protocol is shared by
+/// both - and two surfaces, because the two lanes have different vocabularies.
+///
+/// WHAT IT IS NOT
 ///
 /// It is not the adapter, and cannot be — an EnsLib.HTTP.OutboundAdapter subclass
 /// cannot be instantiated outside a production, and Ens.Director offers no way to
