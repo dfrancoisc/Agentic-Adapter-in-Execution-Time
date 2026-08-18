@@ -5,7 +5,7 @@
 /// and nor does the built-in ToUpper(), which is the tell that bare resolution is
 /// not a property of the class hierarchy:
 ///
-///   ##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",{OBX:5.1},"structuredContent.display")
+///   ##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd","code",{OBX:5.1},"structuredContent.display")
 ///
 /// The point is that nobody writes an MCP client. The protocol is shared with the
 /// adapter through Agentic.Adapter.Protocol, so the two cannot drift.
@@ -49,32 +49,39 @@
 Class Agentic.Adapter.Functions Extends Ens.Rule.FunctionSet
 {
 
-/// Call an MCP tool and return one value from the result.
+/// Call an MCP tool with ONE named argument, and return one value from the result.
 ///
-///   pItem     production item configured with Agentic.Adapter.MCP, or a plain URL
-///   pTool     tool to invoke
-///   pValue    value passed as the tool's "code" argument
-///   pPath     dotted path into the result, e.g. structuredContent.display
-///   pDefault  returned when the lookup produces nothing
+///   pItem      production item configured with Agentic.Adapter.MCP, or a plain URL
+///   pArgument  the NAME of the tool's argument, from its inputSchema — "code",
+///              "text", "query", "id", whatever that tool calls it
+///   pValue     the value to send as that argument
+///   pPath      dotted path into the result. Defaults to content.0.text, which is
+///              where MCP puts a plain text answer. Servers that return structured
+///              output use something like structuredContent.display
+///   pDefault   returned when the lookup produces nothing
+///
+/// Nothing here assumes a domain. Get the argument name and the result shape from
+/// the server's own catalogue — send a ToolRequest with Action="list" and read the
+/// inputSchema.
 ///
 /// PASS THE EXISTING VALUE AS pDefault when assigning back over a field. Without it,
-/// a code the server does not recognise blanks whatever was already there, which is
-/// data loss dressed up as enrichment:
+/// a lookup that finds nothing blanks whatever was already there, which is data loss
+/// dressed up as enrichment:
 ///
-///   MCPLookup("TxLookup","translate_icd",{OBX:5.1},"structuredContent.display",{OBX:5.2})
+///   MCPLookup("TxLookup","translate_icd","code",{OBX:5.1},"structuredContent.display",{OBX:5.2})
 ///
 /// reads as "translate this, and if you cannot, keep what was there".
 ///
 /// It never raises. An exception escaping a DTL fails the whole transformation, and
-/// an unrecognised code is a data quality finding rather than a broken interface, so
-/// failures go to the Event Log and pDefault comes back.
-ClassMethod MCPLookup(pItem As %String, pTool As %String, pValue As %String, pPath As %String = "structuredContent.display", pDefault As %String = "") As %String
+/// a value the server cannot resolve is a data quality finding rather than a broken
+/// interface, so failures go to the Event Log and pDefault comes back.
+ClassMethod MCPLookup(pItem As %String, pTool As %String, pArgument As %String, pValue As %String, pPath As %String = "content.0.text", pDefault As %String = "") As %String
 {
     if pValue = "" quit pDefault
+    if pArgument = "" quit pDefault
     set tArgs = {}
-    set tArgs.code = pValue
-    set tResult = ..MCPCall(pItem, pTool, tArgs.%ToJSON(), pPath)
-    quit $select(tResult '= "": tResult, 1: pDefault)
+    do tArgs.%Set(pArgument, pValue)
+    quit ..MCPCall(pItem, pTool, tArgs.%ToJSON(), pPath, pDefault)
 }
 
 /// Call an MCP tool with arbitrary arguments.

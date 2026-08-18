@@ -173,15 +173,15 @@ production item, so a transformation names the server rather than embedding it.
 In a DTL assign:
 
 ```
-##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",{OBX:5.1},"structuredContent.display")
+##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd","code",{OBX:5.1},"structuredContent.display")
 ```
 
 Two functions are provided:
 
 | Function | For |
 |---|---|
-| `MCPLookup(item, tool, value, path)` | one value in, one value out — the common case |
-| `MCPCall(item, tool, argumentsJSON, path)` | arbitrary arguments |
+| `MCPLookup(item, tool, argument, value, path, default)` | one named argument in, one value out |
+| `MCPCall(item, tool, argumentsJSON, path, default)` | arbitrary arguments |
 
 `item` is a production item configured with `Agentic.Adapter.MCP`, or a plain URL if
 you would rather not depend on a production at all.
@@ -233,7 +233,7 @@ than raising, because an exception escaping a DTL fails the whole transformation
            create='copy' language='objectscript'>
 
   <assign action='set'
-          value='##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},"structuredContent.display")'
+          value='##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd","code",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},"structuredContent.display",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2})'
           property='target.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2}'/>
 
 </transform>

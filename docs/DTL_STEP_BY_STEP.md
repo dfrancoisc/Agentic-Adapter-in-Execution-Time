@@ -106,6 +106,7 @@ XData DTL [ XMLNamespace = "http://www.intersystems.com/dtl" ]
         value='##class(Agentic.Adapter.Functions).MCPLookup(
                  "TxLookup",
                  "translate_icd",
+                 "code",
                  source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},
                  "structuredContent.display",
                  source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2})'/>
@@ -118,15 +119,36 @@ XData DTL [ XMLNamespace = "http://www.intersystems.com/dtl" ]
 
 (The `value` is one line in the real class; it is wrapped here to be readable.)
 
-Five arguments, in order:
+Six arguments, in order. Nothing about them is terminology-specific — every one
+comes from the server's own catalogue or from your message:
 
-| | |
-|---|---|
-| `"TxLookup"` | the production item — where the server, TLS and credential come from |
-| `"translate_icd"` | the tool, from step 2 |
-| `source.{...OBX:5(1).1}` | the value to send |
-| `"structuredContent.display"` | where the answer sits in the result |
-| `source.{...OBX:5(1).2}` | **the default** — what to keep if the lookup fails |
+| Argument | Here | What it is |
+|---|---|---|
+| item | `"TxLookup"` | the production item — where the server, TLS and credential come from |
+| tool | `"translate_icd"` | the tool name, from step 2 |
+| argument | `"code"` | **the name of the tool's argument**, from its `inputSchema` in step 2. Another tool might call it `text`, `query`, `term` or `id` |
+| value | `source.{...OBX:5(1).1}` | what to send as that argument |
+| path | `"structuredContent.display"` | where the answer sits in the result. Defaults to `content.0.text`, which is where MCP puts a plain text answer |
+| default | `source.{...OBX:5(1).2}` | what to keep if the lookup finds nothing |
+
+The same function against three different servers and three different argument
+names, all verified:
+
+```
+MCPLookup("TxLookup","translate_icd","code","E11.9","structuredContent.display")
+    → Diabetes mellitus type 2
+
+MCPLookup("TxLookup","echo","text","hello from a DTL")
+    → hello from a DTL
+
+MCPCall("https://mcp.deepwiki.com/mcp","ask_question",
+        {"repoName":"...","question":"What transports are supported?"},"content.0.text")
+    → The "Everything Server" ... supports three transport mechanisms: stdio, SSE ...
+```
+
+Use `MCPCall` when a tool takes more than one argument — you supply the whole
+arguments object as JSON. `MCPLookup` is the shorthand for the common
+one-argument case.
 
 Three things that matter and are easy to get wrong:
 

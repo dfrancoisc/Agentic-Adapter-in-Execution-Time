@@ -21,7 +21,7 @@ Parameter REPORTERRORS = 1;
 XData DTL [ XMLNamespace = "http://www.intersystems.com/dtl" ]
 {
 <transform sourceClass='EnsLib.HL7.Message' targetClass='EnsLib.HL7.Message' sourceDocType='2.5:ORU_R01' targetDocType='2.5:ORU_R01' create='copy' language='objectscript'>
-<assign value='##class(Agentic.Adapter.Functions).MCPLookup("TxLookup","translate_icd",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},"structuredContent.display",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2})' property='target.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2}' action='set'/>
+<assign value='##class(Agentic.Adapter.Functions).MCPLookup("TxLookup","translate_icd","code",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},"structuredContent.display",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2})' property='target.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2}' action='set'/>
 </transform>
 }
 
