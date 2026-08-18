@@ -68,15 +68,40 @@ Property FailOnToolError As %Boolean [ InitialExpression = 0 ];
 ///    "text": "Type 2 diabetes..."}     optional context
 ///
 /// Called with the OUTGOING copy, so ids taken here are valid in ApplyResult().
-Method FindCandidates(pMessage As %Persistent, Output pSC As %Status) As %DynamicArray [ Abstract ]
+///
+/// Override this in ObjectScript, or override Candidates() to write the same logic
+/// in Python. The Output parameter here is why the two exist: a Language=python
+/// signature cannot carry one.
+Method FindCandidates(pMessage As %Persistent, Output pSC As %Status) As %DynamicArray
 {
+    set pSC = $$$OK
+    set tJSON = ..Candidates(pMessage)
+    if tJSON = "" quit []
+    quit ##class(%DynamicAbstractObject).%FromJSON(tJSON)
+}
+
+/// Python-friendly form of FindCandidates: return the candidate array as a JSON
+/// string. No Output parameters, so this can be written entirely in Python.
+Method Candidates(pMessage As %Persistent) As %String
+{
+    quit "[]"
 }
 
 /// Write one translated result back into the outgoing message.
-/// pCandidate is the entry you produced in FindCandidates(); pResult is whatever
-/// the tool returned at ResultPath.
-Method ApplyResult(pMessage As %Persistent, pCandidate As %DynamicObject, pResult As %DynamicObject) As %Status [ Abstract ]
+/// pCandidate is the entry you produced; pResult is whatever the tool returned at
+/// ResultPath.
+///
+/// Override this in ObjectScript, or override Apply() to write it in Python.
+Method ApplyResult(pMessage As %Persistent, pCandidate As %DynamicObject, pResult As %DynamicObject) As %Status
 {
+    quit ..Apply(pMessage, pCandidate.%ToJSON(), pResult.%ToJSON())
+}
+
+/// Python-friendly form of ApplyResult: both objects arrive as JSON strings, which
+/// Python reads with json.loads and ObjectScript never has to marshal.
+Method Apply(pMessage As %Persistent, pCandidateJSON As %String, pResultJSON As %String) As %Status
+{
+    quit $$$OK
 }
 
 /// Arguments for one tool call. Override when a tool wants a different shape.

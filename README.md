@@ -423,6 +423,14 @@ and `CloneMessage()` when a deep clone is not how your message should be copied.
 
 The full example is 78 lines, and every line is HL7.
 
+**Prefer Python?** Override `Candidates()` and `Apply()` instead of
+`FindCandidates()` and `ApplyResult()`, and write both entirely in Embedded Python.
+They are the same hooks with the awkward parts removed — a JSON string instead of an
+`Output` parameter, JSON strings instead of `%DynamicObject` arguments.
+`Demo.Process.EnrichCodesPython` is the shipped example, and produces byte-identical
+output to the ObjectScript one. Both are shown in full in
+[docs/WRITING_THE_PROCESS.md](docs/WRITING_THE_PROCESS.md).
+
 ---
 
 ## Error model
@@ -577,6 +585,8 @@ more than one message type or destination is in play.
 
 - [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md) — portal walkthrough, both UIs, with a troubleshooting table
 - [docs/EXAMPLE_HL7_ENRICHMENT.md](docs/EXAMPLE_HL7_ENRICHMENT.md) — the worked example in detail
+- [docs/WRITING_THE_PROCESS.md](docs/WRITING_THE_PROCESS.md) — the process class in full, in ObjectScript and in Python
+- [docs/EXAMPLE_REAL_TERMINOLOGY.md](docs/EXAMPLE_REAL_TERMINOLOGY.md) — validating codes against the live HL7 terminology server
 - [docs/BENCHMARK.md](docs/BENCHMARK.md) — 50-message benchmark and method
 - [docs/PRD.md](docs/PRD.md) — product requirements, as user stories
 - [docs/02_Technical_Specification.md](docs/02_Technical_Specification.md) — design decisions and what was verified
