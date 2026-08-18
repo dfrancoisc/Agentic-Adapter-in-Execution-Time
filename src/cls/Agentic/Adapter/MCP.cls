@@ -289,13 +289,15 @@ Method CallTool(tool As %String = "", argsJSON As %String = "", path As %String 
 /// Send one JSON-RPC message and return its result object, or None.
 Method rpc(method As %String, params, notify As %Boolean = 0) [ Internal, Language = python ]
 {
-    import json
-    env = {"jsonrpc": "2.0", "method": method, "params": params or {}}
+    import iris, json
+
+    protocol = iris.cls("Agentic.Adapter.Protocol")
+    request_id = 0
     if not notify:
         self.RequestId = int(self.RequestId or 0) + 1
-        env["id"] = int(self.RequestId)
+        request_id = int(self.RequestId)
 
-    raw = self.Send(json.dumps(env))
+    raw = self.Send(protocol.Envelope(request_id, method, json.dumps(params or {})))
 
     if notify:
         return {}
@@ -305,33 +307,11 @@ Method rpc(method As %String, params, notify As %Boolean = 0) [ Internal, Langua
         self.LastError = "empty response (HTTP %s)" % self.LastHttpCode
         return None
 
-    raw = self.unwrapSSE(raw)
-
-    try:
-        msg = json.loads(raw)
-    except ValueError as e:
-        self.LastError = "response is not JSON: %s" % e
+    verdict = json.loads(protocol.Decode(raw))
+    if not verdict.get("ok"):
+        self.LastError = verdict.get("error") or "unusable response"
         return None
-    if "error" in msg:
-        err = msg["error"] or {}
-        self.LastError = "MCP error %s: %s" % (err.get("code"), err.get("message"))
-        return None
-    return msg.get("result", {})
-}
-
-/// Streamable HTTP allows a server to answer either with plain JSON or with an SSE
-/// stream, and real servers pick SSE even when the request asks for JSON. Pull the
-/// JSON-RPC payload out of the data lines; pass anything else through untouched.
-Method unwrapSSE(raw As %String) As %String [ Internal, Language = python ]
-{
-    text = (raw or "").lstrip()
-    if not text.startswith("event:") and not text.startswith("data:"):
-        return raw
-    payload = []
-    for line in text.splitlines():
-        if line.startswith("data:"):
-            payload.append(line[5:].strip())
-    return "\n".join(payload) if payload else raw
+    return verdict.get("result") or {}
 }
 
 /// May this tool be invoked?
@@ -358,27 +338,12 @@ Method permitted(name As %String) As %Boolean [ Internal, Language = python ]
     return 0
 }
 
-/// Pull a dotted path out of a result object. Blank path returns the whole object.
+/// Pull a dotted path out of a result object, via the shared protocol class so the
+/// DTL functions and this adapter extract values identically.
 Method extract(node, path As %String) [ Internal, Language = python ]
 {
-    import json
-    if not path:
-        return json.dumps(node)
-    for part in path.split("."):
-        if part == "result":
-            continue
-        if isinstance(node, list):
-            try:
-                node = node[int(part)]
-            except (ValueError, IndexError):
-                return ""
-        elif isinstance(node, dict):
-            node = node.get(part)
-        else:
-            return ""
-        if node is None:
-            return ""
-    return node if isinstance(node, str) else json.dumps(node)
+    import iris, json
+    return iris.cls("Agentic.Adapter.Protocol").Extract(json.dumps(node), path or "")
 }
 
 /// Apply OnErrorAction to a failure.

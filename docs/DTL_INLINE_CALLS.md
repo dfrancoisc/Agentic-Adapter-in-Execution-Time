@@ -5,11 +5,12 @@ adapter exists to provide. Both halves of that sentence matter.
 
 ## It works
 
+`Agentic.Adapter.Functions` ships with the module — nobody writes an MCP client.
 `examples/Demo/DTL/EnrichInline.cls` is a normal HL7-to-HL7 transformation with one
-`<assign>`:
+`<assign>` calling it:
 
 ```xml
-<assign value='##class(Demo.MCPFunctions).MCPCall("SnomedMCP","translate_icd",source.{...OBX:5(1).1},"structuredContent.display")'
+<assign value='##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",source.{...OBX:5(1).1},"structuredContent.display")'
         property='target.{...OBX:5(1).2}' action='set'/>
 ```
 
@@ -29,8 +30,9 @@ Two things had to be true for this, and both were verified:
   `Ens.Director.GetAdapterSettings(itemName, .settings)` returns the settings of a
   running production item, so a DTL function can find the endpoint by naming the
   item rather than hard-coding a URL.
-- **The call itself can be made from a class method.** `Demo.MCPFunctions` speaks the
-  MCP handshake and `tools/call` directly in Embedded Python.
+- **The call itself can be made from a class method.** `Agentic.Adapter.Functions`
+  speaks the MCP handshake and `tools/call` through `Agentic.Adapter.Protocol` — the
+  same protocol code the adapter uses, so the two cannot drift.
 
 ## Is the interoperability layer making the call?
 
@@ -61,7 +63,7 @@ interoperability runtime is involved in it.
 |---|---|
 | A running production | **No** — verified with it stopped |
 | A production item for the MCP server | **No**, if you pass a URL. Yes, if you name an item to borrow its settings |
-| `Agentic.Adapter.MCP` | **No** — the function speaks MCP itself |
+| `Agentic.Adapter.MCP` | **No** — the shipped function speaks MCP itself, sharing the adapter's protocol code |
 | Anything else from this module | **No** |
 | An interoperability-enabled namespace | **Yes** — see below |
 
@@ -138,3 +140,20 @@ retryable message.
 
 It is more setup for the same result on the page, and it is the shape the shipped
 `EnrichmentProcess` already implements.
+
+
+## A note on bare function names
+
+An earlier draft of this shipped a `Agentic.Adapter.DTL` base class, on the theory
+that inheriting the functions would let a DTL call `MCPLookup(...)` by bare name the
+way it calls `Lookup(...)`. It does not work, and the class was removed rather than
+shipped broken.
+
+Testing showed the generated code emits the bare name verbatim, and it fails at
+runtime with `<UNDEFINED>` — inheritance or not. The same test on the built-in
+`ToUpper()` in a hand-authored DTL fails identically, which is the tell: bare
+resolution is not a property of the DTL class hierarchy.
+
+So the documented form is `##class(Agentic.Adapter.Functions).MCPLookup(...)`, which
+is verified. The function set still extends `Ens.Rule.FunctionSet`, which registers
+it for the Rule editor, where bare names are the norm.

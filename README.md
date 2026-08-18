@@ -155,16 +155,44 @@ A transformation can call an MCP server directly, with no business process, no
 operation and no adapter. This is the simplest option and the one that gives up the
 most — read both halves before choosing it.
 
-**1. A function the DTL can call.** `examples/Demo/MCPFunctions.cls` extends
-`Ens.Rule.FunctionSet` and speaks MCP itself, in Embedded Python. It takes either a
-production item name — borrowing that item's endpoint — or a plain URL:
+#### The standard way to call MCP from a DTL
 
-```objectscript
-ClassMethod MCPCall(pItem As %String, pTool As %String,
-                    pValue As %String, pPath As %String) As %String [ Language = python ]
+`Agentic.Adapter.Functions` ships with the module. It is the same protocol code the
+adapter uses — `Agentic.Adapter.Protocol` is shared by both, so the two cannot drift
+— and it reads the endpoint, TLS configuration and credential from a named
+production item, so a transformation names the server rather than embedding it.
+
+In a DTL assign:
+
+```
+##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",{OBX:5.1},"structuredContent.display")
 ```
 
-**2. The DTL.** One `<assign>`. The full class is
+Two functions are provided:
+
+| Function | For |
+|---|---|
+| `MCPLookup(item, tool, value, path)` | one value in, one value out — the common case |
+| `MCPCall(item, tool, argumentsJSON, path)` | arbitrary arguments |
+
+`item` is a production item configured with `Agentic.Adapter.MCP`, or a plain URL if
+you would rather not depend on a production at all.
+
+**On bare function names.** IRIS resolves bare names like `Lookup()` inside a DTL by
+inheritance, and this was tested rather than assumed: a bare call to a function from
+a separately registered function set fails at runtime with `<UNDEFINED>` — and so, it
+turns out, does the built-in `ToUpper()` in a hand-authored DTL. The qualified
+`##class(...)` form is the one that works, so it is the one documented here. The
+function set still extends `Ens.Rule.FunctionSet`, which registers it for the Rule
+editor where bare names are the norm.
+
+**What it costs.** The same three things as any transformation-time call: no
+production message and so nothing in the Visual Trace, no retry or failover, and TLS
+plus basic or bearer authentication but not OAuth 2. Failures are written to the
+Event Log and the function returns an empty string rather than raising, because an
+exception escaping a DTL fails the whole transformation.
+
+**The transform.** One `<assign>`. The full class is
 `examples/Demo/DTL/EnrichInline.cls`:
 
 ```xml
@@ -173,7 +201,7 @@ ClassMethod MCPCall(pItem As %String, pTool As %String,
            create='copy' language='objectscript'>
 
   <assign action='set'
-          value='##class(Demo.MCPFunctions).MCPCall("SnomedMCP","translate_icd",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},"structuredContent.display")'
+          value='##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},"structuredContent.display")'
           property='target.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2}'/>
 
 </transform>
