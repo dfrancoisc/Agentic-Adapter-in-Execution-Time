@@ -107,23 +107,58 @@ Both versions of the enrichment process — `Demo.Process.EnrichCodes` in Object
 and `Demo.Process.EnrichCodesPython` in Embedded Python — were run against the same
 50 messages, with the selection cache warm so no model calls were involved.
 
-## End to end: no measurable difference
+## Method
 
-Three runs each, file in to file out, 50 messages:
+Sequential runs in one namespace are not good enough: starting and stopping
+productions between measurements introduces its own variance. IRIS runs one
+production per namespace, so a true side-by-side needs two.
 
-| Run | Python | ObjectScript |
+- `FHIR` and `USER`, one production each, both interoperability-enabled
+- Identical productions apart from folders and the language of the process
+- **A separate MCP server instance per namespace** (ports 8765 and 8768). The mock
+  is single threaded, so one shared instance would serialise the two productions
+  and measure the mock rather than the code
+- Selection caches warmed in both namespaces first, so no model calls are involved
+- The same 50 files copied into both inbound folders at the same moment
+- Timing is each production's own first pickup to its own last write
+
+## The result, and the control that overturned it
+
+Four concurrent rounds:
+
+| Round | FHIR = Python | USER = ObjectScript |
 |---|---|---|
-| 1 | 3.225 s | 5.059 s |
-| 2 | 5.148 s | 3.791 s |
-| 3 | 3.701 s | 4.483 s |
-| **mean** | **4.02 s** | **4.44 s** |
+| 1 | 2.267 s | 3.876 s |
+| 2 | 3.301 s | 4.929 s |
+| 3 | 1.621 s | 3.252 s |
+| 4 | 2.108 s | 3.741 s |
+| **mean** | **2.32 s** | **3.95 s** |
 
-The ranges overlap almost completely. The first pair of runs suggested Python was
-36% faster; two more runs showed that was run-to-run variance, not a difference.
+Python won every round by about 1.6 seconds. Four out of four, consistent gap — not
+the sort of thing that is usually noise.
 
-That is the expected result. A message costs roughly 80 ms end to end, and almost
-all of it is two MCP round trips, a selector round trip, file reads and file writes —
-identical whichever language the process is written in.
+It was still wrong. The two productions differed in more than language: different
+namespace, different message store, different history. So the languages were swapped
+between the namespaces, changing nothing else, and the test rerun:
+
+| Round | FHIR = ObjectScript | USER = Python |
+|---|---|---|
+| 1 | 3.172 s | 3.103 s |
+| 2 | 3.639 s | 3.583 s |
+| 3 | 4.126 s | 4.072 s |
+| **mean** | **3.65 s** | **3.59 s** |
+
+The gap collapsed from 1.63 s to 0.06 s, and the two namespaces now perform
+identically to within a rounding error in every round.
+
+**The language moved and the gap did not follow it.** Whatever produced the original
+1.6 second difference belonged to the pair of productions, not to Python or
+ObjectScript. A four-for-four result that disappears under a swap was never a
+language result.
+
+This is also what the method-level numbers below predict: the language difference is
+about 15 µs per message, or 0.75 ms across all fifty — far too small to see in a run
+measured in seconds.
 
 ## Method level: ObjectScript is about 30% faster
 
