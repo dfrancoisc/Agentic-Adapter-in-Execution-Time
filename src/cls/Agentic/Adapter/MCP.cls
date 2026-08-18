@@ -156,7 +156,14 @@ Method Handshake() As %String [ Language = python ]
     return json.dumps(resp)
 }
 
-/// List the tools this item is permitted to call, as a JSON array.
+/// The server's full tool catalog as a JSON array, each entry annotated with
+/// "permitted" according to AllowedTools.
+///
+/// Everything the server offers is returned, not just the permitted subset. This
+/// is a discovery call: an interface author needs to see what exists in order to
+/// decide what to allow. Filtering the catalog here would make it impossible to
+/// find out what you are missing. Enforcement happens at CallTool, which is where
+/// it matters.
 Method ListTools() As %String [ Language = python ]
 {
     import json
@@ -172,7 +179,9 @@ Method ListTools() As %String [ Language = python ]
         cursor = resp.get("nextCursor")
         if not cursor:
             break
-    return json.dumps([t for t in tools if self.permitted(t.get("name", ""))])
+    for t in tools:
+        t["permitted"] = bool(self.permitted(t.get("name", "")))
+    return json.dumps(tools)
 }
 
 /// Return one tool's input schema as JSON, or an empty string if not permitted.

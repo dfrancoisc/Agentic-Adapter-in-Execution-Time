@@ -237,6 +237,73 @@ Blank means only `ToolName` may be called.
 `ResultPath` turns an MCP content-block envelope into the value you actually want.
 Without it every caller unwraps the envelope by hand.
 
+## Discovering what a server offers
+
+An MCP server never chooses a tool for you. `tools/call` requires a tool name and
+arguments matching that tool's schema, and the protocol has no verb that takes an
+intent and works it out. So before you can configure `ToolName`, you have to find
+out what exists.
+
+That is what `Action = "list"` and `Action = "describe"` are for. Send a
+`ToolRequest` to the MCP item with no arguments:
+
+```
+set sc=##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service",.svc)
+set r=##class(Agentic.Adapter.Msg.ToolRequest).%New()
+set r.Action="list"
+set sc=svc.SendRequestSync("SnomedMCP",r,.resp)
+write resp.ResultJSON
+```
+
+```json
+[{"name": "translate_code",
+  "description": "Translate a local code to a target terminology.",
+  "inputSchema": {"type": "object",
+                  "properties": {"code": {"type": "string"},
+                                 "system": {"type": "string"}},
+                  "required": ["code"]},
+  "permitted": true},
+ {"name": "echo",
+  "description": "Echo the input back.",
+  "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
+  "permitted": false}]
+```
+
+The catalog is deliberately **not** filtered by `AllowedTools`. Every tool the
+server offers is returned, annotated with whether this item may call it. Filtering
+here would make it impossible to discover what you are missing; enforcement belongs
+at `CallTool`, which is where it matters. Above, `echo` is visible but not callable,
+because `AllowedTools` is `^translate_code$`.
+
+### The design-time workflow
+
+1. Configure the MCP item with the server URL, TLS and credentials. Leave `ToolName`
+   blank for now.
+2. Start the production and send `Action = "list"`. You now have every tool, its
+   description, and its input schema.
+3. Decide which tool does the job, and read its `inputSchema` to learn the argument
+   shape — `{"code": "..."}` above. This is the step where a language model is
+   genuinely useful: hand it the catalog and your goal, and let it tell you which
+   tool to use and how to shape the arguments. That happens at your desk, not in the
+   message path.
+4. Pin the answer into configuration: set `ToolName`, restrict `AllowedTools`, set
+   `ResultPath`. Build the process to construct arguments in that shape.
+5. Runtime is now deterministic. The same message produces the same call, every
+   time, with no model involved and nothing to pay per message.
+
+### Is there a language model anywhere in this?
+
+**No.** The adapter calls the tool it is told to call. Nothing in this module
+configures, contacts, or depends on a language model, and there is no LLM in any of
+the example productions.
+
+Runtime tool selection — hand the catalog and a goal to a model and let it choose
+per message — is a real capability and a real build, described as Mode B in
+[docs/PRD.md](docs/PRD.md). It would need a model configured somewhere in the
+production, credentials, and caps on iterations, latency and cost, because a model
+choosing per message can choose differently on the next one. The adapter is the
+substrate that work would sit on, unchanged.
+
 ## Worked example
 
 An MCP server exposing `translate_code`, which returns

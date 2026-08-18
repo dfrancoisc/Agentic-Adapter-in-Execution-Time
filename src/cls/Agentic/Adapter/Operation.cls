@@ -20,7 +20,18 @@ Method OnMessage(pRequest As Agentic.Adapter.Msg.ToolRequest, Output pResponse A
     try {
         set tTool = $select(pRequest.ToolName '= "": pRequest.ToolName, 1: ..Adapter.ToolName)
         set pResponse.ToolName = tTool
-        set pResponse.ResultJSON = ..Adapter.CallTool(pRequest.ToolName, pRequest.ArgumentsJSON, pRequest.ResultPath)
+        set tAction = $select(pRequest.Action '= "": pRequest.Action, 1: "call")
+
+        ; Discovery. Ask the server what it offers, and with what argument shape.
+        ; This is how an interface author finds the right tool before pinning it
+        ; into configuration - the MCP server never chooses a tool itself.
+        if tAction = "list" {
+            set pResponse.ResultJSON = ..Adapter.ListTools()
+        } elseif tAction = "describe" {
+            set pResponse.ResultJSON = ..Adapter.DescribeTool(tTool)
+        } else {
+            set pResponse.ResultJSON = ..Adapter.CallTool(pRequest.ToolName, pRequest.ArgumentsJSON, pRequest.ResultPath)
+        }
         set pResponse.IsError = ..Adapter.LastIsError
         set pResponse.ErrorText = ..Adapter.LastError
         ; A tool that ran and reported failure is a business outcome: it is returned
