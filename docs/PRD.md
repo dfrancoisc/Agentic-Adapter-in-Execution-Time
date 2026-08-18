@@ -14,30 +14,33 @@ Product Area:       IRIS for Health / Health Connect — Interoperability Produc
 
 ### The customer problem
 
-Maria is an integration engineer at a 400-bed health system. She owns about ninety
-HL7 interfaces. A material share of her week is not integration at all — it is making
-imperfect data acceptable to the receiving system.
-
-The lab sends diagnosis codes in ICD-10; the analytics platform wants SNOMED. One
-feed sends LOINC, another sends local codes with a lookup table nobody has maintained
-since 2019. A new FHIR endpoint needs a mapping that exists only in a specification
-document. The knowledge to resolve any of it lives outside the interface engine — in
-a terminology server, a mapping service, a reference dataset, increasingly in a
+An interoperability engine moves messages between systems. Increasingly, something
+useful sits outside it that the interface would benefit from asking while a message
+is in flight — a terminology service, a mapping service, a reference dataset, a
 model-backed service.
 
-Reaching those from a production means writing code. A custom business operation, a
-hand-rolled HTTP client, an endpoint pasted into a setting or hard-coded, a token
-handled by hand, error semantics invented afresh. Maria has written that code four
-times for four services, each slightly different, each tested to a different
-standard. The engineer who wrote the oldest one left in 2023.
+Maria is an integration engineer at a 400-bed health system, and she owns about
+ninety interfaces. Her instance of this problem is codes: the lab sends ICD-10 where
+the analytics platform wants SNOMED, one feed sends LOINC, another sends local codes
+against a lookup table nobody has maintained since 2019. But the shape of the problem
+is not specific to codes, and the next one she meets will not be. It might be
+enriching an address, validating an identifier, classifying a document, or asking a
+service what a segment maps to.
+
+Whatever the question, reaching the service that answers it means writing code. A
+custom business operation, a hand-rolled HTTP client, an endpoint pasted into a
+setting or hard-coded, a token handled by hand, error semantics invented afresh.
+Maria has written that code four times for four services, each slightly different,
+each tested to a different standard. The engineer who wrote the oldest one left in
+2023.
 
 The cost is threefold. **Time**, because each new external capability is a small
 development project rather than a configuration change. **Risk**, because
 hand-rolled connectivity accumulates secrets in the wrong places and inconsistent
 failure handling — and because when something goes wrong mid-interface, there is no
 trace of what the external service was asked or what it said. **Opportunity**,
-because when adding an external capability is expensive, teams do not do it. Data
-quality problems that could be fixed in flight get pushed downstream, or left alone.
+because when adding an external capability is expensive, teams do not do it. Problems
+that could be fixed in flight get pushed downstream, or left alone.
 
 ### The business opportunity
 
@@ -215,6 +218,10 @@ Tagged P0 for launch, P1 important, P2 desirable.
   protocol handling per interface.
 - **P1** — As Maria, I need the same approach to work for HL7, FHIR and X12, so that
   learning it once pays off across the estate.
+- **P0** — As Maria, I need to call an MCP tool from anywhere in a production —
+  my own process, a BPL, an operation I already have — and not only through a
+  helper class that assumes a particular shape of work, so that the mechanism fits
+  my interface rather than the other way round.
 - **P1** — As Maria, I need to write that part in ObjectScript or in Python,
   whichever my team maintains, without a performance penalty for choosing.
 

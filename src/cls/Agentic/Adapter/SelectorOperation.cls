@@ -6,9 +6,8 @@
 /// When a selection later looks wrong, the trace holds what the model was asked,
 /// what it answered, and why.
 ///
-/// It selects a tool. It does not call one, and it never sees a whole clinical
-/// message — only the goal, the tool catalog, and the discriminating fields the
-/// caller chooses to send.
+/// It selects a tool. It does not call one, and it never sees a whole message —
+/// only the goal, the tool catalog, and whichever fields the caller chooses to send.
 Class Agentic.Adapter.SelectorOperation Extends Ens.BusinessOperation
 {
 

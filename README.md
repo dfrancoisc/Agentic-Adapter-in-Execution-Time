@@ -11,20 +11,71 @@ and Health Connect.
 
 ## The problem this solves
 
-An integration engineer spends a lot of time making imperfect data good enough for
-the receiving system. A local diagnosis code has to become SNOMED. A LOINC code has
-to be mapped. A segment has to be matched to a FHIR resource.
+An interoperability engine moves messages between systems. Increasingly, something
+useful sits outside it — a terminology service, a mapping service, a reference
+dataset, a model-backed service — and the interface would be better if it could ask
+that thing a question while the message is in flight.
 
-The knowledge to do that lives outside the interface engine — in a terminology
-server, a mapping service, increasingly in a model-backed service. Reaching any of
-them from a production has historically meant writing code: a custom operation, a
-hand-rolled HTTP client, an endpoint pasted into a setting, a token handled by hand,
-error semantics invented afresh each time.
+MCP (Model Context Protocol) has become the common way those services expose
+callable tools. Reaching one from a production has meant writing code: a custom
+operation, a hand-rolled HTTP client, an endpoint pasted into a setting, a token
+handled by hand, error semantics invented afresh for every service.
 
-This module makes that a configuration step instead, with the platform's own
-security and audit behaviour.
+This module makes calling an MCP server a configuration step, with the platform's
+own security and audit behaviour, from any production, on any message.
 
----
+**It is not about terminology.** Terminology is the example used throughout this
+documentation because it is concrete and easy to verify. The adapter knows about MCP
+and nothing else — no message formats, no domain concepts, no healthcare. Arguments
+go in as JSON, a tool result comes back as JSON. What you ask for and what you do
+with the answer are entirely yours.
+
+### How generic is it, really
+
+Every domain word in the shipped module appears in a comment or an example. There is
+no domain logic, no domain property and no domain assumption in any executable line.
+
+The evidence is not just an audit. The same unchanged adapter has called:
+
+- a terminology server, resolving real ICD-10, LOINC and SNOMED CT codes against the
+  public HL7 FHIR terminology server
+- **DeepWiki's `ask_question` tool**, a public MCP server on the internet that
+  answers questions about GitHub repositories — nothing to do with healthcare,
+  messages, or codes, and requiring no change to a single line
+
+The minimum integration is one message and one call. Any business process, BPL or
+custom operation can do this, from anywhere in a production:
+
+```objectscript
+set tReq = ##class(Agentic.Adapter.Msg.ToolRequest).%New()
+set tReq.ToolName = "whatever_the_server_offers"
+set tReq.ArgumentsJSON = {"anything":"you like"}.%ToJSON()
+set tSC = ..SendRequestSync("MyMCPItem", tReq, .tResp)
+```
+
+That is the whole product surface. Everything else is convenience.
+
+### What the convenience layer assumes, and when to ignore it
+
+`Agentic.Adapter.EnrichmentProcess` encapsulates one common shape: *find several
+values in a message, decide a tool for each, call it, write the answer back, forward
+the message*. That shape covers a lot of real interfaces, which is why it exists —
+it took the worked example from 255 lines to 78.
+
+It is a helper, not a constraint. Use it when the shape fits. Do not use it when it
+does not, and reach for the four lines above instead:
+
+| What you want | Use |
+|---|---|
+| Enrich several values in a message | `EnrichmentProcess` |
+| One call per message, not per value | Your own process, `SendRequestSync` |
+| Use the answer to **route** rather than modify | Your own process or a BPL |
+| Call a tool and forward nothing | A business operation of your own |
+| Several different tools in sequence | A BPL, calling the MCP item repeatedly |
+| Call from a routing rule or transformation | Not yet — see the technical specification |
+
+None of those need a change to the adapter. They are different callers of the same
+configured item.
 
 ## The pieces, and why there are four
 
