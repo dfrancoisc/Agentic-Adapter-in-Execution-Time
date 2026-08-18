@@ -72,7 +72,7 @@ does not, and reach for the four lines above instead:
 | Use the answer to **route** rather than modify | Your own process or a BPL |
 | Call a tool and forward nothing | A business operation of your own |
 | Several different tools in sequence | A BPL, calling the MCP item repeatedly |
-| Call from a routing rule or transformation | Not yet — see the technical specification |
+| Call from a routing rule or transformation | Works, with real trade-offs — see [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md) |
 
 None of those need a change to the adapter. They are different callers of the same
 configured item.
@@ -833,6 +833,7 @@ more than one message type or destination is in play.
 
 - [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md) — portal walkthrough, both UIs, with a troubleshooting table
 - [docs/EXAMPLE_HL7_ENRICHMENT.md](docs/EXAMPLE_HL7_ENRICHMENT.md) — the worked example in detail
+- [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md) — calling MCP from inside a DTL: verified, and what it costs
 - [docs/architecture.html](docs/architecture.html) — architecture diagrams: the five hosts, the message path, and the model boundary
 - [docs/WRITING_THE_PROCESS.md](docs/WRITING_THE_PROCESS.md) — the process class in full, in ObjectScript and in Python
 - [docs/EXAMPLE_REAL_TERMINOLOGY.md](docs/EXAMPLE_REAL_TERMINOLOGY.md) — validating codes against the live HL7 terminology server
