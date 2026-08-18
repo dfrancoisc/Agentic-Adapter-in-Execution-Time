@@ -114,6 +114,24 @@ Priya — Security and Compliance Officer
 
 ---
 
+## 3b. What is a feature and what is a customer's configuration
+
+Stated because it has been a recurring source of confusion in review.
+
+| | |
+|---|---|
+| **Features** | Two ways to call an MCP server from a production — an outbound adapter for the production lane, a pair of functions for the transformation lane — plus optional model-based tool selection. Shipped, generic, installed by IPM |
+| **Customer configuration** | Which server, which tool, which credential, which field. Set in the Management Portal |
+| **Customer code** | Where the values live in their message and what to do with the answer |
+| **Examples** | Everything shipped under `Demo.*`. Not installed, not supported |
+
+The two features exist because IRIS offers two places to call from, and an adapter
+cannot exist in the second: an adapter hangs off a business host, and a
+transformation is not one. Terminology is used throughout the examples because it is
+concrete and verifiable, not because the product is about terminology.
+
+---
+
 ## 4. User stories
 
 Tagged P0 for launch, P1 important, P2 desirable.
