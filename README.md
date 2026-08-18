@@ -77,6 +77,91 @@ does not, and reach for the four lines above instead:
 None of those need a change to the adapter. They are different callers of the same
 configured item.
 
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph OUT1[" "]
+    SRC["Sending system"]
+  end
+
+  subgraph PROD["IRIS production"]
+    direction LR
+    BS["Business service<br/><code>HL7FileIn</code>"]
+    BP["Business process<br/><b>your logic</b><br/><code>EnrichmentProcess</code>"]
+    MCPOP["Business operation<br/>+ <b>MCP adapter</b><br/><code>SnomedMCP</code>"]
+    SELOP["Business operation<br/>+ <b>LLM adapter</b><br/><code>ToolSelector</code>"]
+    BO["Business operation<br/><code>HL7FileOut</code>"]
+  end
+
+  subgraph OUT2[" "]
+    MCP["MCP server<br/><i>tools/list · tools/call</i>"]
+    LLM["Model provider<br/><i>Bedrock · Anthropic · OpenAI</i>"]
+    DST["Receiving system"]
+  end
+
+  SRC -->|message| BS
+  BS -->|message| BP
+  BP <-->|"tools/list · tools/call"| MCPOP
+  BP <-->|"goal + catalog / chosen tool"| SELOP
+  BP -->|improved message| BO
+  BO -->|message| DST
+  MCPOP -.->|HTTPS| MCP
+  SELOP -.->|HTTPS| LLM
+```
+
+Solid lines are production messages: traced in the Message Viewer, individually
+retryable. Dashed lines are the only two places anything leaves the production, both
+over TLS with credentials the platform resolves.
+
+Only the two operations reach outside, and each carries exactly one adapter for one
+external system. The business process is the only component that talks to both — and
+the only one you write.
+
+### What happens to one message
+
+Every hop is a real production message. This is a trace from a running instance:
+
+```
+1  HL7FileIn    -> EnrichCodes    the message arrives and is parsed
+2  EnrichCodes  -> SnomedMCP      what tools does this server offer?
+3  SnomedMCP    -> EnrichCodes    the catalog, with input schemas
+4  EnrichCodes  -> ToolSelector   the goal, the catalog, the value in hand
+5  ToolSelector -> EnrichCodes    the chosen tool and why — usually from cache
+6  EnrichCodes  -> SnomedMCP      call that tool with these arguments
+7  SnomedMCP    -> EnrichCodes    the result
+8  EnrichCodes  -> HL7FileOut     the improved message, forwarded
+```
+
+Steps 2 to 5 disappear when the tool is known in advance. Configure a tool name, or
+map a field in the message to one, and a message costs a single call — no catalog
+fetch, no model, no cache.
+
+### The model never touches the tool server
+
+```mermaid
+flowchart LR
+  MCPA["MCP adapter<br/><i>holds the credential</i>"]
+  BP["Business process<br/><i>the only party in both</i>"]
+  LLMA["LLM adapter<br/><i>sees text only</i>"]
+  GATE{{"AllowedTools<br/>checked here"}}
+
+  MCPA -->|catalog| BP
+  BP -->|catalog as prompt text| LLMA
+  LLMA -->|a tool name, as text| BP
+  BP --> GATE
+  GATE -->|call this tool| MCPA
+```
+
+The two adapters have no connection to each other. Everything the model learns
+arrives as text in a prompt and everything it decides comes back as text. It holds no
+credential for the tool server, has no network path to it, and cannot invoke
+anything. A model that hallucinates a tool name, or is argued into naming a
+destructive one, is refused by configuration it can neither see nor influence.
+
+Richer diagrams, including the full topology with both boundaries drawn:
+[docs/architecture.html](docs/architecture.html).
+
 ## The pieces, and why there are four
 
 Two adapters and two hosts. Each has one job.
