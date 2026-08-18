@@ -98,3 +98,60 @@ do ##class(Agentic.Adapter.SelectorOperation).ClearCache()
   treat it as an order of magnitude, not a guarantee.
 - Selection caching is per namespace and survives restarts. A production restarted
   mid-day does not pay the cold cost again.
+
+---
+
+# Python versus ObjectScript, for the business process
+
+Both versions of the enrichment process — `Demo.Process.EnrichCodes` in ObjectScript
+and `Demo.Process.EnrichCodesPython` in Embedded Python — were run against the same
+50 messages, with the selection cache warm so no model calls were involved.
+
+## End to end: no measurable difference
+
+Three runs each, file in to file out, 50 messages:
+
+| Run | Python | ObjectScript |
+|---|---|---|
+| 1 | 3.225 s | 5.059 s |
+| 2 | 5.148 s | 3.791 s |
+| 3 | 3.701 s | 4.483 s |
+| **mean** | **4.02 s** | **4.44 s** |
+
+The ranges overlap almost completely. The first pair of runs suggested Python was
+36% faster; two more runs showed that was run-to-run variance, not a difference.
+
+That is the expected result. A message costs roughly 80 ms end to end, and almost
+all of it is two MCP round trips, a selector round trip, file reads and file writes —
+identical whichever language the process is written in.
+
+## Method level: ObjectScript is about 30% faster
+
+To isolate the language from the network, both implementations were copied verbatim
+onto a plain object and called directly. 5000 iterations against a real four-segment
+HL7 message:
+
+| Method | ObjectScript | Python | Ratio |
+|---|---|---|---|
+| find candidates | 23.8 µs | 30.3 µs | 1.28x |
+| apply result | 28.6 µs | 36.5 µs | 1.27x |
+
+Stable across runs at 2000 and 5000 iterations.
+
+Reproduce with `do ##class(Agentic.Bench.LanguageCompare).Run(5000)`.
+
+## What that means
+
+ObjectScript is consistently faster in the method itself, and it does not matter.
+The gap is about 15 µs per message, against roughly 80,000 µs of end-to-end cost —
+under 0.02%. It would take about 65,000 messages for the difference to add up to one
+second.
+
+So choose on other grounds: what your team writes fluently, what your libraries are
+in, what the next person to maintain the interface will read comfortably. Both
+classes are shipped, both are supported by the base class, and they produce
+byte-identical output.
+
+If a process ever does something genuinely compute-heavy per message — parsing large
+payloads, running a real algorithm — measure it then. For reading a few fields and
+writing a few back, the language is not the variable that matters.
