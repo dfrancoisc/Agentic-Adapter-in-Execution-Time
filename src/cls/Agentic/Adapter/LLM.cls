@@ -14,7 +14,7 @@
 Class Agentic.Adapter.LLM Extends EnsLib.HTTP.OutboundAdapter
 {
 
-Parameter SETTINGS = "ConnectionName:LLM Connection,ConnectionNamespace:LLM Connection,Provider:LLM,Model:LLM,MaxTokens:LLM,Temperature:LLM,AuthType:LLM,HeaderName:LLM,APIVersion:LLM";
+Parameter SETTINGS = "ConnectionName:LLM Connection:selector?context={Agentic.Adapter.ContextSearch/LLMConnections},ConnectionNamespace:LLM Connection,Provider:LLM,Model:LLM,MaxTokens:LLM,Temperature:LLM,AuthType:LLM,HeaderName:LLM,APIVersion:LLM";
 
 /// Name of a connection already configured in AI Settings, e.g. bedrock-default.
 ///

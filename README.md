@@ -209,20 +209,27 @@ asks for a host category first — choosing Process leads to a Process Type drop
 
 | Target | Setting | Value |
 |---|---|---|
-| Adapter | `HTTPServer` | `terminology.example.com` |
-| Adapter | `HTTPPort` | `443` |
-| Adapter | `URL` | `/mcp/terminology` |
-| Adapter | `SSLConfig` | `mcp-tls` |
+| Adapter | `ServerURL` | `https://terminology.example.com/mcp` |
 | Adapter | `Credentials` | `TerminologyMCP` |
 | Adapter | `AuthType` | `bearer`, or `oauth2` |
-| Adapter | `AllowedTools` | `^translate_` |
+| Adapter | `AllowedTools` | leave blank |
 | Adapter | `OnErrorAction` | `fail` |
+
+`ServerURL` is the whole address, pasted from the vendor's documentation. It fills
+in host, port and path for you and picks the default TLS configuration for `https`.
+Set `HTTPServer` / `HTTPPort` / `URL` / `SSLConfig` by hand only if you need finer
+control.
+
+Leave `AllowedTools` blank and every tool the server offers can be called — the
+right default, since you usually do not know a server's tools in advance. Fill it in
+only when you do know and want this interface restricted: plain tool names, comma
+separated, `*` as a wildcard (`lookup_*`, or `translate_icd, translate_loinc`).
 
 **ToolSelector** — Outbound Host, `Agentic.Adapter.SelectorOperation`
 
 | Target | Setting | Value |
 |---|---|---|
-| Adapter | `ConnectionName` | `bedrock-default` |
+| Adapter | `ConnectionName` | pick from the dropdown, e.g. `bedrock-default` |
 | Host | `CacheEnabled` | `1` |
 | Host | `CacheSeconds` | `86400` |
 | Host | `RequireKnownTool` | `1` |
@@ -461,8 +468,9 @@ the full OAuth 2 surface (`OAuth2ApplicationName`, `OAuth2GrantType`, `OAuth2Sco
 | `ClientName` | `IRIS-MCP-Adapter` | Reported in the handshake |
 | `AuthType` | `none` | `none`, `basic`, `bearer`, `header`, `oauth2` |
 | `HeaderName` | `X-API-Key` | Header used when `AuthType` is `header` |
+| `ServerURL` | | The server address as a URL. Fills in host, port, path and TLS |
 | `ToolName` | | Default tool |
-| `AllowedTools` | | Regular-expression allow-list. Blank permits only `ToolName` |
+| `AllowedTools` | | Blank allows every tool the server offers. Otherwise plain names, comma separated, `*` wildcard |
 | `ResultPath` | | Dotted path into the result, so callers get a scalar |
 | `OnErrorAction` | `fail` | `fail`, `passthrough`, `default` |
 | `DefaultValue` | | Returned under `OnErrorAction = default` |
@@ -509,8 +517,22 @@ Implemented: `initialize` and `notifications/initialized` with capability
 negotiation, session identity, `tools/list` with pagination, `tools/call` including
 `isError` and content blocks, `ping`. Streamable HTTP transport.
 
+Server responses are accepted as plain JSON or as an SSE stream, because real
+servers use both.
+
 Not implemented: resources, prompts, sampling, roots, server-initiated requests,
-notification streams, `stdio` transport.
+notification streams, and `stdio` transport.
+
+**What `stdio` means, and why it is not here.** An MCP server can be reached two
+ways. Over **HTTP**, it is a network service with a URL — what this adapter does.
+Over **stdio**, there is no network at all: the client launches the server as a
+child process on the same machine and talks to it through that process's standard
+input and output. That is how desktop tools like Claude Desktop run local MCP
+servers. It makes no sense for an interface engine — it would mean IRIS spawning and
+supervising child processes on the production server, with their own environments,
+lifetimes and orphan cleanup, to reach something that has no address. If a server you
+want is stdio-only, run it behind a small HTTP wrapper and point `ServerURL` at
+that.
 
 ---
 

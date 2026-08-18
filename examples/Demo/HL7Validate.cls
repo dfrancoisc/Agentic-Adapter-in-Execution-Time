@@ -47,10 +47,8 @@ XData ProductionDefinition
   </Item>
 
   <Item Name="TerminologyMCP" Category="Terminology" ClassName="Agentic.Adapter.Operation" PoolSize="1" Enabled="true" Foreground="false" Comment="tx.fhir.org via MCP" LogTraceEvents="true" Schedule="">
-    <Setting Target="Adapter" Name="HTTPServer">127.0.0.1</Setting>
-    <Setting Target="Adapter" Name="HTTPPort">8767</Setting>
-    <Setting Target="Adapter" Name="URL">/</Setting>
-    <Setting Target="Adapter" Name="AllowedTools">^lookup_</Setting>
+    <Setting Target="Adapter" Name="ServerURL">http://127.0.0.1:8767/</Setting>
+    <Setting Target="Adapter" Name="AllowedTools">lookup_*</Setting>
     <Setting Target="Adapter" Name="OnErrorAction">fail</Setting>
     <Setting Target="Adapter" Name="ResponseTimeout">40</Setting>
   </Item>

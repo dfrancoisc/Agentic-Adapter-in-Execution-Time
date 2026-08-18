@@ -14,12 +14,24 @@
 Class Agentic.Adapter.MCP Extends EnsLib.HTTP.OutboundAdapter
 {
 
-Parameter SETTINGS = "ProtocolVersion:MCP Connection,ClientName:MCP Connection,AuthType:MCP Connection,HeaderName:MCP Connection,ToolName:MCP Tools,AllowedTools:MCP Tools,ResultPath:MCP Tools,OnErrorAction:MCP Behavior,DefaultValue:MCP Behavior";
+Parameter SETTINGS = "ServerURL:MCP Connection,ProtocolVersion:MCP Connection,ClientName:MCP Connection,AuthType:MCP Connection,HeaderName:MCP Connection,ToolName:MCP Tools,AllowedTools:MCP Tools,ResultPath:MCP Tools,OnErrorAction:MCP Behavior,DefaultValue:MCP Behavior";
+
+/// The MCP server address, as a URL you can paste from the vendor's documentation:
+///
+///   https://mcp.example.com/mcp
+///   http://127.0.0.1:8765/
+///
+/// This is the only connection setting most people need. It fills in HTTPServer,
+/// HTTPPort and URL for you, and selects the default TLS configuration for an
+/// https address. Set those three by hand instead if you need finer control.
+Property ServerURL As %String(MAXLEN = 1000);
 
 /// MCP protocol version to negotiate. Blank sends the latest this adapter supports.
 Property ProtocolVersion As %String [ InitialExpression = "2025-06-18" ];
 
-/// Client name reported to the server during the handshake.
+/// How IRIS identifies itself TO the server during the handshake, like a user
+/// agent string. Nothing to do with which server is being called - that is
+/// ServerURL. Rarely worth changing.
 Property ClientName As %String [ InitialExpression = "IRIS-MCP-Adapter" ];
 
 /// How to present credentials: none, basic, bearer, header, oauth2.
@@ -32,9 +44,21 @@ Property HeaderName As %String [ InitialExpression = "X-API-Key" ];
 /// Default tool to invoke when the caller does not name one.
 Property ToolName As %String;
 
-/// Regular expression allow-list of invocable tool names.
-/// Blank means only ToolName may be called. This is a security control:
-/// an MCP server may expose destructive tools that this item must not use.
+/// Optional restriction on which tools this item may invoke.
+///
+/// Leave it BLANK and every tool the server offers can be called. That is the
+/// sensible default: you usually do not know a server's tools in advance, and
+/// discovering them is the whole point of asking it.
+///
+/// Fill it in when you DO know, and want this interface limited to a subset —
+/// for instance a server that also exposes tools that write. Plain tool names,
+/// comma separated, with * as a wildcard:
+///
+///   translate_icd, translate_loinc      exactly these two
+///   lookup_*                            anything beginning lookup_
+///   *                                   everything (same as blank)
+///
+/// Use the list action to see what a server actually offers before filling this in.
 Property AllowedTools As %String(MAXLEN = 500);
 
 /// Dotted path into the tool result, so callers receive a scalar instead of an
@@ -64,13 +88,44 @@ Property LastError As %String(MAXLEN = 2000) [ Internal ];
 /// Monotonic JSON-RPC request id.
 Property RequestId As %Integer [ InitialExpression = 0, Internal ];
 
-/// Reset per-job protocol state when the host starts.
+/// Reset per-job protocol state, and expand ServerURL into the connection
+/// settings the HTTP machinery actually uses.
 Method OnInit() As %Status
 {
     set ..SessionId = ""
     set ..RequestId = 0
     set ..LastError = ""
+
+    if ..ServerURL '= "" {
+        set tParts = ..splitURL(..ServerURL)
+        if tParts = "" {
+            quit $$$ERROR($$$GeneralError, "ServerURL is not a valid URL: "_..ServerURL)
+        }
+        set ..HTTPServer = $piece(tParts, "|", 1)
+        set ..HTTPPort = $piece(tParts, "|", 2)
+        set ..URL = $piece(tParts, "|", 3)
+        ; https needs a TLS configuration; pick the default rather than failing
+        ; at the handshake with something opaque
+        if ($piece(tParts, "|", 4) = "https") && (..SSLConfig = "") {
+            set ..SSLConfig = "default"
+        }
+        $$$LOGINFO("MCP server "_..ServerURL_" -> host "_..HTTPServer_" port "_..HTTPPort_" path "_..URL)
+    }
     quit $$$OK
+}
+
+/// Split a URL into host|port|path|scheme. Empty string if it will not parse.
+Method splitURL(url As %String) As %String [ Internal, Language = python ]
+{
+    from urllib.parse import urlparse
+    u = urlparse((url or "").strip())
+    if not u.scheme or not u.hostname:
+        return ""
+    port = u.port or (443 if u.scheme == "https" else 80)
+    path = u.path or "/"
+    if u.query:
+        path = path + "?" + u.query
+    return "%s|%s|%s|%s" % (u.hostname, port, path, u.scheme)
 }
 
 /// The only method that touches the wire.
@@ -279,17 +334,28 @@ Method unwrapSSE(raw As %String) As %String [ Internal, Language = python ]
     return "\n".join(payload) if payload else raw
 }
 
-/// Is this tool name allowed by configuration?
+/// May this tool be invoked?
+///
+/// Blank AllowedTools permits everything the server offers. Otherwise the name
+/// must match one of a comma separated list of plain tool names, where * is a
+/// wildcard. Deliberately not regular expressions: the person configuring a
+/// production should not have to write one, and a mistyped pattern that silently
+/// matches nothing is a bad way to find out.
 Method permitted(name As %String) As %Boolean [ Internal, Language = python ]
 {
-    import re
-    allowed = self.AllowedTools or ""
+    import fnmatch
+
+    allowed = (self.AllowedTools or "").strip()
     if not allowed:
-        return 1 if (self.ToolName and name == self.ToolName) else 0
-    try:
-        return 1 if re.search(allowed, name) else 0
-    except re.error:
-        return 0
+        return 1
+
+    for entry in allowed.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if fnmatch.fnmatchcase(name, entry):
+            return 1
+    return 0
 }
 
 /// Pull a dotted path out of a result object. Blank path returns the whole object.
