@@ -51,28 +51,37 @@ Class Agentic.Adapter.Functions Extends Ens.Rule.FunctionSet
 
 /// Call an MCP tool and return one value from the result.
 ///
-///   pItem    production item configured with Agentic.Adapter.MCP, or a plain URL
-///   pTool    tool to invoke
-///   pValue   value passed as the tool's "code" argument
-///   pPath    dotted path into the result, e.g. structuredContent.display
+///   pItem     production item configured with Agentic.Adapter.MCP, or a plain URL
+///   pTool     tool to invoke
+///   pValue    value passed as the tool's "code" argument
+///   pPath     dotted path into the result, e.g. structuredContent.display
+///   pDefault  returned when the lookup produces nothing
 ///
-/// Returns an empty string when the value is empty, the server cannot be reached,
-/// or the tool reports isError. It never raises: an exception escaping a DTL fails
-/// the whole transformation, and an unrecognised code is a data quality finding
-/// rather than a broken interface. Failures are written to the Event Log.
-ClassMethod MCPLookup(pItem As %String, pTool As %String, pValue As %String, pPath As %String = "structuredContent.display") As %String
+/// PASS THE EXISTING VALUE AS pDefault when assigning back over a field. Without it,
+/// a code the server does not recognise blanks whatever was already there, which is
+/// data loss dressed up as enrichment:
+///
+///   MCPLookup("TxLookup","translate_icd",{OBX:5.1},"structuredContent.display",{OBX:5.2})
+///
+/// reads as "translate this, and if you cannot, keep what was there".
+///
+/// It never raises. An exception escaping a DTL fails the whole transformation, and
+/// an unrecognised code is a data quality finding rather than a broken interface, so
+/// failures go to the Event Log and pDefault comes back.
+ClassMethod MCPLookup(pItem As %String, pTool As %String, pValue As %String, pPath As %String = "structuredContent.display", pDefault As %String = "") As %String
 {
-    if pValue = "" quit ""
+    if pValue = "" quit pDefault
     set tArgs = {}
     set tArgs.code = pValue
-    quit ..MCPCall(pItem, pTool, tArgs.%ToJSON(), pPath)
+    set tResult = ..MCPCall(pItem, pTool, tArgs.%ToJSON(), pPath)
+    quit $select(tResult '= "": tResult, 1: pDefault)
 }
 
 /// Call an MCP tool with arbitrary arguments.
 /// Same contract as MCPLookup, but you supply the whole arguments object as JSON.
-ClassMethod MCPCall(pItem As %String, pTool As %String, pArgumentsJSON As %String = "{}", pPath As %String = "") As %String
+ClassMethod MCPCall(pItem As %String, pTool As %String, pArgumentsJSON As %String = "{}", pPath As %String = "", pDefault As %String = "") As %String
 {
-    set tResult = ""
+    set tResult = pDefault
     try {
         set tEndpoint = ..endpoint(pItem)
         if tEndpoint = "" {
@@ -94,7 +103,8 @@ ClassMethod MCPCall(pItem As %String, pTool As %String, pArgumentsJSON As %Strin
             do ..log("tool '"_pTool_"' reported isError")
             quit
         }
-        set tResult = ##class(Agentic.Adapter.Protocol).Extract(tVerdict.result.%ToJSON(), pPath)
+        set tExtracted = ##class(Agentic.Adapter.Protocol).Extract(tVerdict.result.%ToJSON(), pPath)
+        if tExtracted '= "" { set tResult = tExtracted }
     }
     catch ex {
         do ..log("MCP call raised: "_ex.DisplayString())

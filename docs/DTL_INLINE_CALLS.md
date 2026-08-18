@@ -1,4 +1,13 @@
-# Calling an MCP server from inside a DTL
+# Calling MCP from a DTL — design notes
+
+**Looking for the instructions? Use [DTL_STEP_BY_STEP.md](DTL_STEP_BY_STEP.md).**
+That page is the current, verified how-to.
+
+This page is why the design is what it is, including several things that were tried
+and abandoned. It is kept because the dead ends are worth not re-walking, but it is
+not a guide.
+
+---
 
 Short answer: **it works.** It is also the option that gives up the three things the
 adapter exists to provide. Both halves of that sentence matter.

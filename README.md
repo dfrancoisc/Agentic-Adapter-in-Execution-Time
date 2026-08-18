@@ -292,8 +292,9 @@ in a business process *before* the transform and pass the answer in. The DTL the
 reads a value already in hand, and the call stays a traced, retryable message. That
 is what the shipped `EnrichmentProcess` already does.
 
-Full write-up, including why the function cannot simply borrow the adapter:
-[docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md).
+Step by step, from an empty production to a working transformation:
+[docs/DTL_STEP_BY_STEP.md](docs/DTL_STEP_BY_STEP.md). Design notes and abandoned
+approaches: [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md).
 
 ## Architecture
 
@@ -979,7 +980,8 @@ more than one message type or destination is in play.
 
 - [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md) — portal walkthrough, both UIs, with a troubleshooting table
 - [docs/EXAMPLE_HL7_ENRICHMENT.md](docs/EXAMPLE_HL7_ENRICHMENT.md) — the worked example in detail
-- [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md) — calling MCP from inside a DTL: verified, and what it costs
+- [docs/DTL_STEP_BY_STEP.md](docs/DTL_STEP_BY_STEP.md) — calling MCP from a DTL, step by step
+- [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md) — the design notes behind that, and what was tried and dropped
 - [docs/architecture.html](docs/architecture.html) — architecture diagrams: the five hosts, the message path, and the model boundary
 - [docs/WRITING_THE_PROCESS.md](docs/WRITING_THE_PROCESS.md) — the process class in full, in ObjectScript and in Python
 - [docs/EXAMPLE_REAL_TERMINOLOGY.md](docs/EXAMPLE_REAL_TERMINOLOGY.md) — validating codes against the live HL7 terminology server
