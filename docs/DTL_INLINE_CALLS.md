@@ -87,10 +87,13 @@ production involvement means no retry, no failover, no alerting.
 
 The function does **not** go through `Agentic.Adapter.MCP`, and cannot.
 
-**Security.** The adapter inherits `SSLConfig`, `Credentials`, OAuth 2 and proxy
-handling from `EnsLib.HTTP.OutboundAdapter`. A DTL function has none of that unless
-it reimplements it. TLS and a bearer token are reachable with effort; OAuth 2 —
-token acquisition, caching, refresh — realistically is not.
+**Security — partly, and better than an early draft of this document claimed.**
+`Agentic.Adapter.Functions` reads the named item's `SSLConfig` and `Credentials` and
+applies them, so TLS and bearer or basic authentication do carry over. Verified: a
+call to a live public `https` MCP server returned 3,847 characters, and a server
+rigged to echo its `Authorization` header reported `Bearer s3cr3t-token-value` from
+the IRIS credential store. What does not carry over is OAuth 2 — token acquisition,
+caching and refresh are adapter machinery — and the proxy settings.
 
 **Tracing.** There is no production message for the call. Nothing appears in the
 Visual Trace or the Message Viewer. The argument for the whole adapter design was

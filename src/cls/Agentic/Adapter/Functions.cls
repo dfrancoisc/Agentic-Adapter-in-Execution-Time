@@ -1,13 +1,14 @@
 /// MCP functions for DTLs and routing rules.
 ///
-/// Extending Ens.Rule.FunctionSet registers these with the DTL and Rule editors, so
-/// they appear in the function picker beside Lookup() and ConvertDateTime(). An
-/// interface engineer selects one from the list; nobody writes a class method call
-/// by hand, and nobody writes their own MCP client.
+/// Extending Ens.Rule.FunctionSet registers these for the Rule editor. In a DTL,
+/// call them qualified — bare function names do not resolve in a hand-authored DTL,
+/// and nor does the built-in ToUpper(), which is the tell that bare resolution is
+/// not a property of the class hierarchy:
 ///
-/// In a DTL:
+///   ##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",{OBX:5.1},"structuredContent.display")
 ///
-///   MCPLookup("SnomedMCP", "translate_icd", {OBX:5.1}, "structuredContent.display")
+/// The point is that nobody writes an MCP client. The protocol is shared with the
+/// adapter through Agentic.Adapter.Protocol, so the two cannot drift.
 ///
 /// The first argument names a production item configured with Agentic.Adapter.MCP.
 /// Its endpoint, TLS configuration and credential are read from that item, so the
@@ -27,15 +28,24 @@
 /// cannot be instantiated outside a production, and Ens.Director offers no way to
 /// invoke a business operation from arbitrary code. So a call made here:
 ///
-///   - is NOT a production message. It does not appear in the Visual Trace or the
-///     Message Viewer, and nothing records what was asked six months later
-///   - has NO retry, failover or alerting. A slow server blocks the transformation
-///   - supports TLS, basic and bearer authentication, but NOT OAuth 2, whose token
-///     acquisition and refresh belong to the adapter
+/// WHAT IT DOES AND DOES NOT CARRY OVER
 ///
-/// Use it for a fast, simple lookup where the audit trail does not matter. Route
-/// through a business process and Agentic.Adapter.Operation when it does — which in
-/// a clinical interface is most of the time.
+/// It reads the named item's settings and applies them, so more survives than you
+/// might expect. Verified, not assumed:
+///
+///   TLS            YES. SSLConfig from the item, or "default" for a bare https
+///                  URL. Proven against a live public https MCP server
+///   Credentials    YES. Bearer or basic from the IRIS credential store, via the
+///                  item's Credentials setting. Proven with a server that echoes
+///                  back the Authorization header it received
+///   OAuth 2        NO. Token acquisition, caching and refresh are adapter machinery
+///   Proxy          NO
+///   Traced message NO. Nothing in the Visual Trace or Message Viewer
+///   Retry/failover NO. A slow server blocks the transformation
+///
+/// So the choice is not "secure versus insecure". It is whether the call needs to be
+/// an auditable, retryable event in its own right, or needs OAuth 2. When it does,
+/// route it through a business process and Agentic.Adapter.Operation.
 Class Agentic.Adapter.Functions Extends Ens.Rule.FunctionSet
 {
 

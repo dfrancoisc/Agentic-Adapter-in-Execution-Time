@@ -194,11 +194,35 @@ turns out, does the built-in `ToUpper()` in a hand-authored DTL. The qualified
 function set still extends `Ens.Rule.FunctionSet`, which registers it for the Rule
 editor where bare names are the norm.
 
-**What it costs.** The same three things as any transformation-time call: no
-production message and so nothing in the Visual Trace, no retry or failover, and TLS
-plus basic or bearer authentication but not OAuth 2. Failures are written to the
-Event Log and the function returns an empty string rather than raising, because an
-exception escaping a DTL fails the whole transformation.
+**How it authenticates.** This is the part I got wrong in an earlier draft, so it is
+worth being precise. `MCPLookup` reads the named item's settings and applies them,
+so more survives than "no adapter" suggests. All verified, not assumed:
+
+| | Carried over? |
+|---|---|
+| TLS | **Yes** — `SSLConfig` from the item, or `default` for a bare `https` URL |
+| Credentials | **Yes** — bearer or basic from the IRIS credential store, via the item's `Credentials` setting |
+| OAuth 2 | No — token acquisition, caching and refresh are adapter machinery |
+| Proxy settings | No |
+| Traced production message | No |
+| Retry, failover, alerting | No |
+
+Proof, both run against live servers:
+
+```
+TLS          MCPCall("https://mcp.deepwiki.com/mcp", "ask_question", ...)
+             → 3,847 characters back over https
+
+credentials  item configured with Credentials=MCPDemoKey, AuthType=bearer
+             server echoed:  Bearer s3cr3t-token-value
+```
+
+So the choice between the two lanes is not secure versus insecure. Both authenticate.
+It is whether the call needs to be an auditable, retryable event in its own right, or
+needs OAuth 2.
+
+Failures are written to the Event Log and the function returns an empty string rather
+than raising, because an exception escaping a DTL fails the whole transformation.
 
 **The transform.** One `<assign>`. The full class is
 `examples/Demo/DTL/EnrichInline.cls`:
@@ -255,11 +279,11 @@ value you need in hand to finish mapping the message. The business process is th
 right answer when the call needs to be a traced, retryable event in its own right,
 or needs OAuth 2.
 
-What `MCPLookup` gives up is real and worth knowing before you choose it: no
-production message and so nothing in the Visual Trace, no retry or failover, and TLS
-plus basic or bearer authentication but not OAuth 2. In a clinical interface those
-usually decide it. In a transformation that normalises a units code against an
-internal service, they usually do not.
+What `MCPLookup` gives up is real: no production message and so nothing in the Visual
+Trace, no retry or failover, no OAuth 2. What it keeps is also real, and I understated
+it earlier — TLS and credentials both carry over from the named item. In a clinical
+interface the missing audit trail usually decides it. In a transformation that
+normalises a units code against an internal service, it usually does not.
 
 There is a third shape if the one-line DTL ergonomics are what appeal: do the lookup
 in a business process *before* the transform and pass the answer in. The DTL then

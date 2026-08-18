@@ -37,6 +37,10 @@ TOOLS = [
     {"name": "echo",
      "description": "Echo the input back.",
      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}}},
+    {"name": "whoami",
+     "description": "Report the Authorization header the caller sent. Exists so a "
+                    "test can prove credentials actually reach the server.",
+     "inputSchema": {"type": "object", "properties": {}}},
 ]
 
 # code -> (snomed code, display)
@@ -100,6 +104,11 @@ class Handler(BaseHTTPRequestHandler):
             elif name == "translate_code":
                 table = LOINC if code in LOINC else ICD
                 body = ok(id_, translated(code, table))
+            elif name == "whoami":
+                auth = self.headers.get("Authorization") or "(none)"
+                body = ok(id_, {"isError": False,
+                                "content": [{"type": "text", "text": auth}],
+                                "structuredContent": {"authorization": auth}})
             elif name == "echo":
                 body = ok(id_, {"isError": False,
                                 "content": [{"type": "text",
