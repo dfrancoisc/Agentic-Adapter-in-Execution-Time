@@ -150,7 +150,7 @@ Use `MCPCall` when a tool takes more than one argument — you supply the whole
 arguments object as JSON. `MCPLookup` is the shorthand for the common
 one-argument case.
 
-Three things that matter and are easy to get wrong:
+Four things that matter and are easy to get wrong:
 
 - **`create='copy'`** carries the rest of the message through untouched. With
   `create='new'` you get only what you assign, and an HL7 target loses its segment
@@ -158,10 +158,9 @@ Three things that matter and are easy to get wrong:
 - **The group path.** Once a DocType is set, `{OBX:5.1}` on its own does not resolve;
   the path needs its groups. Getting this wrong fails silently — the assign writes
   nothing and the message passes through unchanged.
-- **The fifth argument.** Without it, a code the server does not recognise blanks
-  the description that was already there. That is data loss dressed up as
+- **The last argument, the default.** Without it, a value the server cannot resolve
+  blanks whatever was already in the field. That is data loss dressed up as
   enrichment.
-
 - **Call it qualified**, with `##class(...)`. Bare function names do not resolve in a
   hand-authored DTL — not even the built-in `ToUpper()` does.
 
