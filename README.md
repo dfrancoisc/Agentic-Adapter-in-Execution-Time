@@ -1,55 +1,115 @@
-# Agentic MCP Adapter
+# Agentic Adapter in Execution Time
 
-A generic outbound adapter that lets any InterSystems IRIS interoperability
-production call an MCP (Model Context Protocol) server.
+Call an MCP (Model Context Protocol) server from an InterSystems IRIS
+interoperability production, while a message is in flight, configured rather than
+coded.
 
-Standalone. No dependency on any other module. Install it, add a business operation
-to your production, point it at an MCP server, and call that server's tools.
+Standalone module. No dependency on anything else. Works on IRIS, IRIS for Health
+and Health Connect.
 
-Works on IRIS, IRIS for Health and Health Connect.
+---
 
-## What it is
+## The problem this solves
 
-The adapter is to MCP what `EnsLib.HTTP.OutboundAdapter` is to HTTP: configurable
-connectivity, nothing more. It knows about MCP and nothing else — no message
-formats, no domain concepts. Arguments go in as JSON, a tool result comes back as
-JSON. What to call and what to do with the answer belongs to your interface.
+An integration engineer spends a lot of time making imperfect data good enough for
+the receiving system. A local diagnosis code has to become SNOMED. A LOINC code has
+to be mapped. A segment has to be matched to a FHIR resource.
 
-## Step by step — from nothing to a working call
+The knowledge to do that lives outside the interface engine — in a terminology
+server, a mapping service, increasingly in a model-backed service. Reaching any of
+them from a production has historically meant writing code: a custom operation, a
+hand-rolled HTTP client, an endpoint pasted into a setting, a token handled by hand,
+error semantics invented afresh each time.
 
-### 1. Install once, for the whole instance
+This module makes that a configuration step instead, with the platform's own
+security and audit behaviour.
 
-The adapter is installed **once per instance**, into a shared database mapped to
-every namespace. You do not install it per namespace, and namespaces created later
-pick it up automatically.
+---
 
-If IRIS is in a container and the source is on your host, copy it in first:
+## The pieces, and why there are four
+
+Two adapters and two hosts. Each has one job.
+
+| Component | Kind | Job |
+|---|---|---|
+| `Agentic.Adapter.MCP` | Outbound adapter | Speak MCP to a tool server |
+| `Agentic.Adapter.Operation` | Business operation | Expose that adapter to the production |
+| `Agentic.Adapter.LLM` | Outbound adapter | Speak to a model provider |
+| `Agentic.Adapter.SelectorOperation` | Business operation | Ask a model which tool to call, and cache the answer |
+| `Agentic.Adapter.EnrichmentProcess` | Business process, abstract | The orchestration you would otherwise rewrite every time |
+
+### Why two adapters and not one
+
+They are two different external systems, speaking two different protocols, with two
+different credentials.
+
+| | `Agentic.Adapter.MCP` | `Agentic.Adapter.LLM` |
+|---|---|---|
+| Talks to | An MCP server | A model provider |
+| Protocol | JSON-RPC 2.0: `tools/list`, `tools/call` | Bedrock Converse, Anthropic Messages, OpenAI |
+| Credential | The tool vendor's | Your AWS or Anthropic key |
+| Fails when | The tool service is down | The model provider throttles you |
+
+In IRIS one adapter means one external connection. Merging them would put two
+vendors behind one host, and when something failed you could not say which — retry,
+failover and timeout would all become ambiguous. They are separate for the same
+reason a SQL adapter and an FTP adapter are separate.
+
+### The model never talks to the MCP server
+
+This surprises people. The two adapters have no connection to each other at all.
+The business process is the only thing that touches both:
+
+```
+1. process → MCP adapter    tools/list                 "what can you do?"
+2. MCP adapter → process    the catalog, as JSON
+3. process → LLM adapter    goal + that catalog, as TEXT in a prompt
+4. LLM adapter → process    {"tool":"translate_icd"}, as TEXT
+5. process → MCP adapter    tools/call translate_icd
+```
+
+At step 3 the catalog is characters in a prompt. At step 4 the answer is characters
+coming back. The model has no network path to your tool server, no credentials for
+it, and no ability to invoke anything.
+
+That is a security property worth keeping. The model can only *suggest* a tool name;
+the MCP adapter then checks that name against `AllowedTools` before anything runs. A
+model that hallucinates a tool, or is talked into naming a destructive one, is
+refused by configuration it cannot see or influence.
+
+---
+
+## Worked scenario, end to end
+
+An ORU arrives as a file. Its OBX carries a local ICD-10 diagnosis code. We want
+SNOMED CT in the message before it goes downstream, without losing the original.
+The terminology service is external, on the public internet, behind OAuth 2.
+
+```
+/tmp/hl7in → HL7FileIn → EnrichCodes ⇄ SnomedMCP  → HL7FileOut → /tmp/hl7out
+                              ⇅
+                         ToolSelector
+```
+
+### Step 1 — Install once, for the whole instance
+
+The adapter lives in a shared database mapped to every namespace, so you install it
+once and namespaces created later pick it up automatically.
 
 ```
 docker cp /path/to/Agentic-Adapter-in-Execution-Time <container>:/opt/mcpadapter
 ```
 
-In an IRIS session, load the installer and run it:
+Then in an IRIS session:
 
 ```
 do $system.OBJ.Load("/opt/mcpadapter/setup/Agentic/Install.cls","ck")
 do ##class(Agentic.Install).Setup()
-```
-
-That creates the `AGENTICLIB` database, creates the `%ALL` pseudo-namespace if the
-instance does not have one, and maps the `Agentic.Adapter` package and its routines
-into `%ALL`.
-
-Then load the module, from any namespace — the mapping puts the code in the shared
-database regardless of where you run it from:
-
-```
 zpm "load /opt/mcpadapter"
 ```
 
-No IPM? `do $system.OBJ.ImportDir("/opt/mcpadapter/src/cls","*.cls","ck",,1)`
-
-Confirm it is visible everywhere:
+`Setup()` creates the `AGENTICLIB` database, creates the `%ALL` pseudo-namespace if
+the instance lacks one, and maps the `Agentic.Adapter` package into it. Confirm:
 
 ```
 do ##class(Agentic.Install).Verify()
@@ -58,197 +118,203 @@ do ##class(Agentic.Install).Verify()
 ```
               FHIR : adapter visible
           HSCUSTOM : adapter visible
-             HSLIB : adapter visible
-             HSSYS : adapter visible
-    HSSYSLOCALTEMP : adapter visible
-             PAYER : adapter visible
               USER : adapter visible
 ```
 
-Only the **code** is shared. Message data globals are deliberately not mapped, so
-every namespace keeps its own message store and no production can see another's
-traffic.
+Only code is shared. Message data stays per-namespace, so no production can see
+another's traffic. `Unmap()` reverses it. Prefer a single namespace? Skip the
+installer and `zpm "load"` where you want it.
 
-To reverse the mapping, `do ##class(Agentic.Install).Unmap()`. The database and its
-contents are left in place.
+### Step 2 — TLS
 
-#### Installing into one namespace only
+System Administration → Security → **SSL/TLS Configurations** → Create.
 
-If you would rather not touch instance-wide configuration, skip the installer and
-just `zpm "load"` in the namespace you want. The adapter works exactly the same —
-it is simply not visible from anywhere else.
+Name it something you will recognise in a setting, for example `mcp-tls`. Client
+configuration, default trust settings unless your organisation says otherwise.
 
-### 2. Store the credential (skip if the server needs no auth)
+You need this for any `https` endpoint. Without it the connection fails at the
+handshake and the operation goes red on start.
 
-Management Portal → Interoperability → Configure → **Credentials**.
+### Step 3 — Credentials
 
-Create an entry, for example `TerminologyMCP`. For a bearer token or API key, put
-the token in the **Password** field; the User field can be anything. The adapter
-reads the password and never exposes it as a setting.
+Interoperability → Configure → **Credentials** → Create.
 
-For TLS, System Administration → Security → **SSL/TLS Configurations** — note the
-configuration name, you will need it in step 4.
-
-### 3. Add the operation to a production
-
-Management Portal → Interoperability → Configure → **Production**.
-
-Pick an existing production or create one. Then:
-
-1. Click **+** next to **Operations**.
-2. **Operation Class**: `Agentic.Adapter.Operation`
-3. **Operation Name**: whatever the interface will call it, e.g. `SnomedMCP`
-4. Click **OK**.
-
-### 4. Configure it
-
-Select the new operation. The settings panel on the right has three MCP groups plus
-the standard HTTP ones.
-
-Connection — where the server is:
-
-| Setting | Example |
+| Field | Value |
 |---|---|
-| `HTTPServer` | `terminology.internal` |
-| `HTTPPort` | `443` |
-| `URL` | `/mcp/terminology` |
-| `SSLConfig` | your TLS configuration name (required for https) |
+| ID | `TerminologyMCP` |
+| User name | anything, often the account name |
+| Password | the API key or bearer token |
 
-Security:
+The adapter reads the password and never exposes it as a setting, never logs it, and
+never writes it to a production definition. If your server takes a bearer token or an
+API key header, this is where it goes.
 
-| Setting | Example |
+### Step 4 — OAuth 2, if the server uses it
+
+System Administration → Security → **OAuth 2.0** → Client → Create Client
+Configuration. Register against the server's issuer, note the application name.
+
+Then on the adapter set `AuthType` to `oauth2` and fill:
+
+| Setting | Value |
 |---|---|
-| `Credentials` | `TerminologyMCP` |
-| `AuthType` | `bearer` |
+| `OAuth2ApplicationName` | your client configuration name |
+| `OAuth2GrantType` | usually `client_credentials` for unattended interfaces |
+| `OAuth2Scope` | whatever the server issues |
 
-For OAuth 2, set `AuthType` to `oauth2` and fill `OAuth2ApplicationName`,
-`OAuth2GrantType` and `OAuth2Scope` instead of `Credentials`.
+Token acquisition, caching and refresh are handled by the platform, because the
+adapter inherits `EnsLib.HTTP.OutboundAdapter`. There is no token code to write and
+no refresh timer to manage. Use `Credentials` **or** OAuth 2, not both.
 
-MCP Tools:
+### Step 5 — The LLM connection (only if you want model-based tool selection)
 
-| Setting | Example |
+Skip this entirely if you know which tool to call. See "Choosing a tool" below.
+
+If you already have a connection configured in AI Settings, name it and the adapter
+inherits everything:
+
+| Setting on `ToolSelector` | Value |
 |---|---|
-| `ToolName` | `translate_code` |
-| `AllowedTools` | `^(translate_code\|lookup_display)$` |
-| `ResultPath` | `structuredContent.code` |
+| `ConnectionName` | `bedrock-default` |
+| `ConnectionNamespace` | namespace holding the connection data, if not this one |
 
-MCP Behavior:
+That resolves the provider, model, region, endpoint and API key at host start. For
+Bedrock the endpoint becomes
+`bedrock-runtime.<region>.amazonaws.com/model/<model>/converse` automatically. One
+place to rotate a key or change model, for every production that references it.
 
-| Setting | Example |
-|---|---|
-| `OnErrorAction` | `fail` |
+No AI Settings? Configure the adapter directly instead: `Provider`
+(`bedrock` / `anthropic` / `openai` / `custom`), `Model`, `HTTPServer`, `URL`,
+`SSLConfig`, and `Credentials`.
 
-Click **Apply**.
+### Step 6 — Build the production
 
-`AllowedTools` matters: leave it blank and only `ToolName` can be called. That is
-deliberate — an MCP server may expose tools this interface has no business invoking.
+Interoperability → Configure → **Production** → New. Then add four hosts.
 
-### 5. Start the production
+The adapter is an **Outbound Host**. In the new Production Configuration UI, Create
+asks for a host category first — choosing Process leads to a Process Type dropdown
+(General / HL7 / X12 / Component) that does not apply here.
 
-Click **Start** in the production toolbar. The operation should show a green status.
+**HL7FileIn** — Inbound Host, `EnsLib.HL7.Service.FileService`
 
-### 6. Test it before wiring anything to it
-
-Add `EnsLib.Testing.Service` to the production as a Service, then from a terminal in
-that namespace:
-
-```
-set sc=##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service",.svc)
-set r=##class(Agentic.Adapter.Msg.ToolRequest).%New()
-set r.ArgumentsJSON="{""code"":""E11.9""}"
-set sc=svc.SendRequestSync("SnomedMCP",r,.resp)
-write resp.ResultJSON
-```
-
-Expect the extracted value, e.g. `44054006`. Then open Interoperability → View →
-**Message Viewer** and you will see the request and response as traced messages.
-
-If it fails, check Interoperability → View → **Event Log** — the adapter logs the
-tool name and the error, never the payload.
-
-### 7. Call it from your interface
-
-From a BPL business process, use a `<call>` targeting the operation name, with a
-`ToolRequest` as the request. From a routing rule, `<send>` to it. Either way it is
-an ordinary production message, so it appears in the Visual Trace like everything
-else.
-
-To use a different tool or pull a different field on a given call, set `ToolName` or
-`ResultPath` on the request — they override the configured defaults for that call
-only.
-
-### Trying it with no real MCP server
-
-`tests/mock_mcp_server.py` is a dependency-free mock exposing `translate_code` and
-`echo`. Run it wherever IRIS can reach it:
-
-```
-python3 tests/mock_mcp_server.py
-```
-
-It listens on `127.0.0.1:8765`, so configure `HTTPServer` `127.0.0.1`, `HTTPPort`
-`8765`, `URL` `/`, no TLS and no credential. `tests/Agentic/Adapter/TestProduction.cls`
-is a ready-made production wired to it.
-
-## Classes
-
-| Class | Purpose |
-|---|---|
-| `Agentic.Adapter.MCP` | The outbound adapter. Use it on any business operation |
-| `Agentic.Adapter.Operation` | A ready-made generic business operation, if you do not want to write your own |
-| `Agentic.Adapter.Msg.ToolRequest` | Request message: tool name, arguments JSON, optional result path |
-| `Agentic.Adapter.Msg.ToolResponse` | Response message: result, isError, error text, duration |
-
-You do not have to use `Agentic.Adapter.Operation`. Any business operation can set
-`Parameter ADAPTER = "Agentic.Adapter.MCP"` and call the adapter directly.
-
-## Settings
-
-### Connection and security — inherited from `EnsLib.HTTP.OutboundAdapter`
-
-`HTTPServer`, `HTTPPort`, `URL`, `SSLConfig`, `SSLCheckServerIdentity`,
-`Credentials`, `ConnectTimeout`, `ResponseTimeout`, `RetriesToFailover`,
-`ProxyServer`, `ProxyPort`, `ProxyHTTPS`, and the full OAuth 2 surface
-(`OAuth2ApplicationName`, `OAuth2GrantType`, `OAuth2Scope`,
-`OAuth2AccessTokenPlacement`, `OAuth2GrantTypeSpecific`, `OAuth2JWTSubject`).
-
-Because these are inherited, tokens are acquired, cached and refreshed by the
-platform. No secret is ever typed into a setting — secrets resolve through the IRIS
-credentials store or the OAuth 2 client configuration.
-
-### MCP settings
-
-| Setting | Default | Purpose |
+| Target | Setting | Value |
 |---|---|---|
-| `ProtocolVersion` | `2025-06-18` | MCP version to negotiate |
-| `ClientName` | `IRIS-MCP-Adapter` | Client name sent in the handshake |
-| `AuthType` | `none` | `none`, `basic`, `bearer`, `header`, `oauth2` |
-| `HeaderName` | `X-API-Key` | Header to use when `AuthType` is `header` |
-| `ToolName` | | Default tool, used when the caller does not name one |
-| `AllowedTools` | | Regular-expression allow-list of invocable tools |
-| `ResultPath` | | Dotted path into the result, so callers get a scalar |
-| `OnErrorAction` | `fail` | `fail`, `passthrough`, or `default` |
-| `DefaultValue` | | Returned when `OnErrorAction` is `default` |
+| Adapter | `FilePath` | `/tmp/hl7in` |
+| Adapter | `FileSpec` | `*.hl7` |
+| Adapter | `ArchivePath` | `/tmp/hl7archive` |
+| Host | `TargetConfigNames` | `EnrichCodes` |
+| Host | `MessageSchemaCategory` | `2.5` |
 
-`AllowedTools` is a security control, not a convenience. An MCP server may expose
-destructive tools; a production item should be permitted only the subset it needs.
-Blank means only `ToolName` may be called.
+**SnomedMCP** — Outbound Host, `Agentic.Adapter.Operation`
 
-`ResultPath` turns an MCP content-block envelope into the value you actually want.
-Without it every caller unwraps the envelope by hand.
+| Target | Setting | Value |
+|---|---|---|
+| Adapter | `HTTPServer` | `terminology.example.com` |
+| Adapter | `HTTPPort` | `443` |
+| Adapter | `URL` | `/mcp/terminology` |
+| Adapter | `SSLConfig` | `mcp-tls` |
+| Adapter | `Credentials` | `TerminologyMCP` |
+| Adapter | `AuthType` | `bearer`, or `oauth2` |
+| Adapter | `AllowedTools` | `^translate_` |
+| Adapter | `OnErrorAction` | `fail` |
 
-## Discovering what a server offers
+**ToolSelector** — Outbound Host, `Agentic.Adapter.SelectorOperation`
 
-An MCP server never chooses a tool for you. `tools/call` requires a tool name and
-arguments matching that tool's schema, and the protocol has no verb that takes an
-intent and works it out. So before you can configure `ToolName`, you have to find
-out what exists.
+| Target | Setting | Value |
+|---|---|---|
+| Adapter | `ConnectionName` | `bedrock-default` |
+| Host | `CacheEnabled` | `1` |
+| Host | `CacheSeconds` | `86400` |
+| Host | `RequireKnownTool` | `1` |
 
-That is what `Action = "list"` and `Action = "describe"` are for. Send a
-`ToolRequest` to the MCP item with no arguments:
+**EnrichCodes** — Process Host, your subclass of `Agentic.Adapter.EnrichmentProcess`
+
+| Setting | Value |
+|---|---|
+| `MCPTarget` | `SnomedMCP` |
+| `SelectorTarget` | `ToolSelector` |
+| `OutputTarget` | `HL7FileOut` |
+| `SelectionMode` | `rule` or `model` |
+| `RuleMap` | `I10=translate_icd,LN=translate_loinc,SCT=` |
+| `Goal` | `Translate this observation code to SNOMED CT` |
+
+**HL7FileOut** — Outbound Host, `EnsLib.HL7.Operation.FileOperation`, `FilePath`
+`/tmp/hl7out`.
+
+Note: settings declared but left blank come through empty rather than falling back
+to their initial expression. Set `CacheEnabled` explicitly, or the cache is silently
+off.
+
+### Step 7 — Start it and send a message
+
+Turn on **Testing Enabled** in the production settings first — the Test action needs
+it, and without it you get `Business dispatch name 'EnsLib.Testing.Service' is not
+registered to run`.
+
+Drop a file into `/tmp/hl7in`:
 
 ```
-set sc=##class(Ens.Director).CreateBusinessService("EnsLib.Testing.Service",.svc)
+MSH|^~\&|LAB|HOSP|EMR|HOSP|20260818120000||ORU^R01|MSG001|P|2.5
+PID|1||123456^^^HOSP^MR||DOE^JOHN||19700101|M
+OBR|1|ORD1|FILL1|PANEL^Panel^L
+OBX|1|CWE|DIAG^Diagnosis^L||E11.9^Type 2 diabetes mellitus without complications^I10||||||F
+```
+
+Out the other side:
+
+```
+OBX|1|CWE|DIAG^Diagnosis^L||44054006^Diabetes mellitus type 2^SCT^E11.9^Type 2 diabetes mellitus without complications^I10||||||F
+```
+
+SNOMED in the primary CWE triplet, the original ICD-10 preserved in the alternate
+triplet. A receiver that does not speak SNOMED can still read what was sent.
+
+### Step 8 — Look at the trace
+
+Interoperability → View → **Message Viewer**, open a message, click **Trace**.
+
+```
+#2147 01:19:09.534     HL7FileIn ->   EnrichCodes   HL7 Message
+#2393 01:19:09.616   EnrichCodes ->     SnomedMCP   ToolRequest     tools/list
+#2394 01:19:09.616     SnomedMCP ->   EnrichCodes   ToolResponse    the catalog
+#2395 01:19:09.616   EnrichCodes ->  ToolSelector   SelectRequest   goal + catalog
+#2396 01:19:09.617  ToolSelector ->   EnrichCodes   SelectResponse  the decision
+#2397 01:19:09.617   EnrichCodes ->     SnomedMCP   ToolRequest     tools/call
+#2398 01:19:09.617     SnomedMCP ->   EnrichCodes   ToolResponse    SNOMED result
+#2399 01:19:09.617   EnrichCodes ->    HL7FileOut   HL7 Message
+```
+
+Every step is a real production message: replayable, searchable, individually
+retryable. Open message 2395 and you see exactly what the model was asked; open 2396
+and you see what it answered and why. That is the difference between an interface you
+can audit and one you have to trust.
+
+---
+
+## Choosing a tool
+
+Three ways, in increasing order of cost. Use the cheapest that answers the question.
+
+| Mode | How the tool is chosen | Cost | Deterministic |
+|---|---|---|---|
+| `fixed` | The MCP item's configured `ToolName` | none | yes |
+| `rule` | A value from the message maps to a tool via `RuleMap` | none | yes |
+| `model` | A model picks from the server's catalog | tokens, latency | no |
+
+Rule mode deserves more credit than it usually gets. An HL7 CWE field names its own
+coding system in the third component — `I10`, `LN`, `SCT` — so the message already
+says which translator it needs. A model asked to decide that is re-deriving something
+the data states outright.
+
+Model mode is the escape hatch: open intent, unfamiliar servers, or catalogs that
+change under you.
+
+### Discovering what a server offers
+
+An MCP server never chooses a tool for you, and the protocol has no verb that takes
+an intent. Before you can configure `ToolName`, you have to find out what exists:
+
+```
 set r=##class(Agentic.Adapter.Msg.ToolRequest).%New()
 set r.Action="list"
 set sc=svc.SendRequestSync("SnomedMCP",r,.resp)
@@ -256,231 +322,228 @@ write resp.ResultJSON
 ```
 
 ```json
-[{"name": "translate_code",
-  "description": "Translate a local code to a target terminology.",
-  "inputSchema": {"type": "object",
-                  "properties": {"code": {"type": "string"},
-                                 "system": {"type": "string"}},
-                  "required": ["code"]},
+[{"name": "translate_icd",
+  "description": "Translate an ICD-10 diagnosis code to SNOMED CT.",
+  "inputSchema": {"properties": {"code": {"type":"string"}}, "required": ["code"]},
   "permitted": true},
- {"name": "echo",
-  "description": "Echo the input back.",
-  "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
-  "permitted": false}]
+ {"name": "echo", "permitted": false}]
 ```
 
-The catalog is deliberately **not** filtered by `AllowedTools`. Every tool the
-server offers is returned, annotated with whether this item may call it. Filtering
-here would make it impossible to discover what you are missing; enforcement belongs
-at `CallTool`, which is where it matters. Above, `echo` is visible but not callable,
-because `AllowedTools` is `^translate_code$`.
+The catalog is deliberately not filtered by `AllowedTools` — you get everything,
+annotated with what this item may call. Filtering here would hide what you are
+missing; enforcement belongs at `CallTool`.
 
-### The design-time workflow
-
-1. Configure the MCP item with the server URL, TLS and credentials. Leave `ToolName`
-   blank for now.
-2. Start the production and send `Action = "list"`. You now have every tool, its
-   description, and its input schema.
-3. Decide which tool does the job, and read its `inputSchema` to learn the argument
-   shape — `{"code": "..."}` above. This is the step where a language model is
-   genuinely useful: hand it the catalog and your goal, and let it tell you which
-   tool to use and how to shape the arguments. That happens at your desk, not in the
-   message path.
-4. Pin the answer into configuration: set `ToolName`, restrict `AllowedTools`, set
-   `ResultPath`. Build the process to construct arguments in that shape.
-5. Runtime is now deterministic. The same message produces the same call, every
-   time, with no model involved and nothing to pay per message.
-
-## Choosing a tool at runtime
-
-Three ways, in increasing order of cost. Use the cheapest one that answers the
-question.
-
-| Mode | How the tool is chosen | Cost | Deterministic |
-|---|---|---|---|
-| fixed | The MCP item's configured `ToolName` | none | yes |
-| rule | A value in the message maps to a tool | none | yes |
-| model | A model picks from the server's catalog | tokens, latency | no |
-
-Rule mode deserves more attention than it usually gets. An HL7 CWE field names its
-own coding system in the third component — `I10`, `LN`, `SCT` — so the message
-already says which translator it needs. A model asked to decide that is re-deriving
-on every message something the data states outright.
-
-Model mode is the escape hatch: open intent, unfamiliar servers, or catalogs that
-change under you.
-
-### Why two adapters, and how they relate
-
-They are two different external systems, speaking two different protocols, with two
-different sets of credentials. In IRIS, one adapter means one external connection —
-that is the whole point of the concept.
-
-| | `Agentic.Adapter.MCP` | `Agentic.Adapter.LLM` |
-|---|---|---|
-| Talks to | An MCP server | A model provider |
-| Protocol | JSON-RPC 2.0: `tools/list`, `tools/call` | Vendor chat API: Bedrock Converse, Anthropic Messages, OpenAI |
-| Credential | The terminology vendor's | Your AWS or Anthropic key |
-| Fails when | The terminology service is down | The model provider throttles you |
-
-Merging them would mean one host holding two connections to two vendors, and when
-something failed you could not say which — retry, failover and timeout would all
-become ambiguous. They are separate for the same reason a database adapter and an
-FTP adapter are separate.
-
-**The model never talks to the MCP server.** This is the part that surprises people.
-The two adapters have no connection to each other at all. The business process is
-the only thing that touches both:
-
-```
-1. process → MCP adapter    tools/list        "what can you do?"
-2. MCP adapter → process    catalog as JSON
-3. process → LLM adapter    goal + that catalog, as TEXT
-4. LLM adapter → process    {"tool": "translate_icd", ...}, as TEXT
-5. process → MCP adapter    tools/call translate_icd
-```
-
-At step 3 the catalog is just characters in a prompt. At step 4 the answer is just
-characters coming back. The model has no network path to the terminology server, no
-credentials for it, and no ability to invoke anything. It reads a description and
-returns a name.
-
-That is a security property worth keeping. The model can only *suggest* a tool; the
-MCP adapter then checks that name against `AllowedTools` before anything is called.
-A model that hallucinates a tool, or is talked into naming a destructive one, gets
-refused by configuration it cannot see or influence.
-
-### The selector
-
-`Agentic.Adapter.SelectorOperation` is the agentic layer, and it is an outbound host
-like any other. That is deliberate — it gets its own credentials, its own timeouts,
-and every selection becomes a traced message. When a selection later looks wrong,
-the trace holds what the model was asked, what it answered, and why.
-
-It selects a tool. It does not call one, and it never sees a whole clinical message
-— only the goal, the catalog, and whichever discriminating fields the caller sends.
-
-`Agentic.Adapter.LLM` is its adapter: provider-neutral (`bedrock`, `anthropic`,
-`openai`, or `custom` wire format) and, like the MCP adapter, extending
-`EnsLib.HTTP.OutboundAdapter` so TLS, credentials and OAuth 2 are inherited rather
-than reimplemented.
-
-#### Point it at a connection you already configured
-
-Rather than restating the endpoint, model and key on every production, name a
-connection from AI Settings and the adapter inherits all of it:
-
-| Setting | Value |
-|---|---|
-| `ConnectionName` | `bedrock-default` |
-| `ConnectionNamespace` | namespace holding the connection data, if not this one |
-
-That resolves the provider, model, region, endpoint and API key at host start. The
-endpoint follows from the provider — Bedrock becomes
-`bedrock-runtime.<region>.amazonaws.com/model/<model>/converse` — and the key is
-read from the wallet into memory for the life of the job, never persisted and never
-logged. One place to rotate a key or change model, for every production that
-references it.
-
-It is an optional soft dependency: with no AI Settings installed, the adapter falls
-back to its own `Provider` / `Model` / `Credentials` settings and the module stays
-standalone.
+This is the design-time half of the workflow: discover the catalog and schemas,
+decide which tool fits — the step where a model genuinely helps, at your desk rather
+than in the message path — then pin the answer into configuration so runtime stays
+deterministic.
 
 ### Caching is what makes model mode affordable
 
-A selection is stable. Which tool translates ICD does not depend on which ICD code
-it is. So the decision is cached, and the cache key is the caller's to choose:
+A selection is stable: which tool translates ICD does not depend on which ICD code it
+is. So the decision is cached, and the key is the caller's to choose:
 
 ```objectscript
-set tReq.CacheKey = ..Goal_"|"_pSystem     ; key on the coding system, not the code
+Method SelectionCacheKey(pCandidate As %DynamicObject) As %String
+{
+    quit ..Goal_"|"_pCandidate.system     ; the coding system, not the code
+}
 ```
 
 Get this wrong and the cost is invisible but large. Keying on the code means a model
-call per distinct code — thousands of paid decisions answering one question. Keying
-on the coding system means one call per system, ever. Measured on four messages
-across two coding systems:
+call per distinct code. Keying on the coding system means one call per system, ever.
+Measured on 50 messages: **2 calls to Bedrock, 48 cache hits**.
 
-```
-#85  translate_icd    fromCache=0  tokens=359     first I10  - model consulted
-#91  translate_icd    fromCache=1  tokens=[]      second I10 - cached
-#77  translate_loinc  fromCache=0  tokens=351     first LN   - model consulted
-```
+---
 
-Two model calls. The same two would serve four million messages.
+## Writing your own enrichment process
 
-`SelectRequest.CacheKey` blank falls back to a derived key covering the goal, the
-catalog and every short scalar in the context — safe, but less efficient than a
-caller who knows what actually discriminates. `ClearCache()` after a server's
-catalog changes.
+Subclass `Agentic.Adapter.EnrichmentProcess` and implement two methods. Everything
+else — catalog, selection, tool invocation, caching, error policy, diagram
+connections — is inherited.
 
-### Is there a language model anywhere in this?
+```objectscript
+Class Demo.Process.EnrichCodes Extends Agentic.Adapter.EnrichmentProcess
+{
 
-**No.** The adapter calls the tool it is told to call. Nothing in this module
-configures, contacts, or depends on a language model, and there is no LLM in any of
-the example productions.
+/// Where the values live in MY message.
+Method FindCandidates(pMessage As EnsLib.HL7.Message, Output pSC As %Status) As %DynamicArray
+{
+    set tOut = []
+    for i = 1:1:pMessage.SegCount {
+        set tSeg = pMessage.GetSegmentAt(i)
+        continue:(tSeg.Name '= ..SegmentType)
+        set tCode = pMessage.GetValueAt(i_":"_..CodeField)
+        continue:(tCode = "")
+        do tOut.%Push({"id": (i), "value": (tCode),
+                       "system": (pMessage.GetValueAt(i_":"_..SystemField)),
+                       "text":   (pMessage.GetValueAt(i_":"_..TextField))})
+    }
+    quit tOut
+}
 
-Only if you configure one. `Agentic.Adapter.SelectorOperation` exists and works, but
-it is used solely when a process sets `SelectionMode` to `model`, and it needs an
-endpoint and credentials configured on its adapter like any other outbound host.
-The MCP adapter itself never contacts a model, and the shipped example runs in rule
-mode with no model in the path at all.
-
-## Worked example
-
-An MCP server exposing `translate_code`, which returns
-`{"code": "...", "display": "...", "system": "..."}`.
-
-Production item settings:
-
-```
-HTTPServer     terminology.internal
-HTTPPort       443
-URL            /mcp/terminology
-SSLConfig      default
-Credentials    TerminologyMCP
-AuthType       bearer
-ToolName       translate_code
-AllowedTools   ^(translate_code|lookup_display)$
-ResultPath     structuredContent.code
-OnErrorAction  fail
+/// What to do with the answer.
+Method ApplyResult(pMessage As EnsLib.HL7.Message, pCandidate As %DynamicObject, pResult As %DynamicObject) As %Status
+{
+    set i = pCandidate.id
+    do pMessage.SetValueAt(pResult.code, i_":"_..CodeField)
+    do pMessage.SetValueAt(pResult.display, i_":"_..TextField)
+    do pMessage.SetValueAt(..TargetSystemLabel, i_":"_..SystemField)
+    do pMessage.SetValueAt(pCandidate.value, i_":"_..AltCodeField)
+    quit $$$OK
+}
+}
 ```
 
-Sending a `ToolRequest` with `ArgumentsJSON = {"code": "E11.9"}` returns
-`44054006`. Setting `ResultPath` to `structuredContent.display` on the request
-instead returns `Diabetes mellitus type 2` from the same call.
+The contract is a candidate: `{"id", "value", "system", "text"}`. `id` is whatever
+you need to find your way back — a segment index here, a FHIR path or an X12 loop
+reference elsewhere. The base class never touches the message, only the candidates,
+which is why the same base works for HL7, FHIR, X12 or a custom class.
 
-## Error handling
+Optionally override `BuildArguments()` when a tool wants a different argument shape,
+and `CloneMessage()` when a deep clone is not how your message should be copied.
 
-Two failure modes, deliberately distinguished:
+The full example is 78 lines, and every line is HL7.
 
-- **Transport or protocol failure** — the server is unreachable, the handshake
-  fails, the response is not valid JSON. `OnErrorAction` decides: fail the message,
-  return empty, or return `DefaultValue`.
-- **Tool failure** — the tool ran and reported `isError`. The message does not fail.
-  `ToolResponse.IsError` is set and the result is returned, because a tool saying
-  "I could not translate that code" is a business outcome, not a broken interface.
+---
 
-## Implementation notes
+## Error model
 
-The MCP protocol work is Embedded Python. The class itself is ObjectScript, because
-that is what makes properties appear as Management Portal settings and what gives
-the adapter its inherited security model.
+Two failure classes, deliberately distinguished. Conflating them produces either
+dropped clinical data or false alarms.
 
-One method, `Send()`, is ObjectScript by necessity: it calls `SendFormDataArray()`,
-whose `Output` parameters cannot appear in a `Language = python` signature. It is
-also the only method that touches the wire — everything goes through the inherited
-HTTP machinery, so the security configuration is always honoured.
+| Class | Cause | Behaviour |
+|---|---|---|
+| Transport or protocol | Server unreachable, handshake failed, non-JSON response, tool not permitted | `OnErrorAction`: `fail`, `passthrough`, or `default` |
+| Tool failure | The tool ran and returned `isError` | The message does **not** fail. That candidate is left untouched and a warning is logged |
 
-## Supported MCP surface
+A terminology server saying "I do not recognise that code" is a data quality finding,
+not an outage. Set `FailOnToolError` on the process if your flow disagrees.
 
-`initialize`, `notifications/initialized`, `tools/list` with pagination,
-`tools/call` including `isError` and content blocks, `ping`. Streamable HTTP
-transport.
+This matters more than it looks. When a model once picked the wrong translator in
+testing, the tool returned `isError`, the code was left as it arrived, and the message
+went on unharmed. A bad decision degraded to "unchanged", not "silently corrupted".
+
+---
+
+## Performance
+
+50 HL7 messages, full agentic path, Bedrock selecting tools. Details and method in
+[docs/BENCHMARK.md](docs/BENCHMARK.md).
+
+| | Cold cache | Warm cache |
+|---|---|---|
+| 50 messages, file in to file out | 23 s | 3 s |
+| Calls to Bedrock | 2 | 0 |
+| Average Bedrock latency | 10.3 s | — |
+
+The two model calls are 20.6 s of the 23 s cold run. Everything else — 50 file reads,
+100 MCP round trips, 400 traced messages, 50 file writes — is about 3 s. The cold
+cost is paid once per deployment, not once per message.
+
+---
+
+## Settings reference
+
+### Inherited by both adapters, from `EnsLib.HTTP.OutboundAdapter`
+
+`HTTPServer`, `HTTPPort`, `URL`, `SSLConfig`, `SSLCheckServerIdentity`,
+`Credentials`, `ConnectTimeout`, `ResponseTimeout`, `WriteTimeout`,
+`RetriesToFailover`, `ProxyServer`, `ProxyPort`, `ProxyHTTPS`, `ExtraHeaders`, and
+the full OAuth 2 surface (`OAuth2ApplicationName`, `OAuth2GrantType`, `OAuth2Scope`,
+`OAuth2AccessTokenPlacement`, `OAuth2GrantTypeSpecific`, `OAuth2JWTSubject`).
+
+### `Agentic.Adapter.MCP`
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `ProtocolVersion` | `2025-06-18` | MCP version negotiated |
+| `ClientName` | `IRIS-MCP-Adapter` | Reported in the handshake |
+| `AuthType` | `none` | `none`, `basic`, `bearer`, `header`, `oauth2` |
+| `HeaderName` | `X-API-Key` | Header used when `AuthType` is `header` |
+| `ToolName` | | Default tool |
+| `AllowedTools` | | Regular-expression allow-list. Blank permits only `ToolName` |
+| `ResultPath` | | Dotted path into the result, so callers get a scalar |
+| `OnErrorAction` | `fail` | `fail`, `passthrough`, `default` |
+| `DefaultValue` | | Returned under `OnErrorAction = default` |
+
+### `Agentic.Adapter.LLM`
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `ConnectionName` | | Inherit everything from a connection in AI Settings |
+| `ConnectionNamespace` | | Namespace holding that connection's data |
+| `Provider` | `anthropic` | `bedrock`, `anthropic`, `openai`, `custom` |
+| `Model` | | Model id as the provider expects it |
+| `MaxTokens` | 512 | |
+| `Temperature` | 0 | Choosing a tool should not be creative |
+| `AuthType` | `apikey` | |
+| `APIVersion` | `2023-06-01` | Anthropic only |
+
+### `Agentic.Adapter.SelectorOperation`
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `CacheEnabled` | 1 | Set it explicitly — blank means off |
+| `CacheSeconds` | 86400 | Selections are stable; be generous |
+| `RequireKnownTool` | 1 | Reject a tool that is not in the catalog |
+
+### `Agentic.Adapter.EnrichmentProcess`
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `MCPTarget` | `MCPServer` | Config name of the MCP item |
+| `OutputTarget` | | Where the enriched message goes. Blank replies to the caller |
+| `SelectionMode` | `fixed` | `fixed`, `rule`, `model` |
+| `RuleMap` | | `I10=translate_icd,LN=translate_loinc,SCT=` |
+| `SelectorTarget` | `ToolSelector` | Config name of the selector item |
+| `Goal` | | What to tell the model |
+| `ResultPath` | `structuredContent` | Passed to the MCP call |
+| `FailOnToolError` | 0 | Fail the message when a tool reports `isError` |
+
+---
+
+## MCP protocol coverage
+
+Implemented: `initialize` and `notifications/initialized` with capability
+negotiation, session identity, `tools/list` with pagination, `tools/call` including
+`isError` and content blocks, `ping`. Streamable HTTP transport.
 
 Not implemented: resources, prompts, sampling, roots, server-initiated requests,
 notification streams, `stdio` transport.
 
-## Testing
+---
 
-`tests/` contains a minimal production fixture and a mock MCP server for exercising
-the adapter without a real server.
+## Is there a language model anywhere in this?
+
+Only if you configure one. `Agentic.Adapter.SelectorOperation` is used solely when a
+process sets `SelectionMode` to `model`, and it needs an endpoint and credentials
+configured like any other outbound host. The MCP adapter itself never contacts a
+model.
+
+---
+
+## Trying it without any real servers
+
+`tests/mock_mcp_server.py` exposes `translate_icd`, `translate_loinc`,
+`translate_code` and `echo`. `tests/mock_llm_server.py` stands in for a model.
+Both are dependency-free.
+
+```
+python3 tests/mock_mcp_server.py     # 127.0.0.1:8765
+python3 tests/mock_llm_server.py     # 127.0.0.1:8766
+```
+
+`examples/Demo/HL7Enrich.cls` is a production wired to them.
+`examples/Demo/HL7EnrichRouted.cls` adds an HL7 routing engine in front, for when
+more than one message type or destination is in play.
+
+---
+
+## Documentation
+
+- [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md) — portal walkthrough, both UIs, with a troubleshooting table
+- [docs/EXAMPLE_HL7_ENRICHMENT.md](docs/EXAMPLE_HL7_ENRICHMENT.md) — the worked example in detail
+- [docs/BENCHMARK.md](docs/BENCHMARK.md) — 50-message benchmark and method
+- [docs/PRD.md](docs/PRD.md) — product requirements, as user stories
+- [docs/02_Technical_Specification.md](docs/02_Technical_Specification.md) — design decisions and what was verified
