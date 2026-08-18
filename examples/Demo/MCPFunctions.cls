@@ -33,7 +33,10 @@ Class Demo.MCPFunctions Extends Ens.Rule.FunctionSet
 /// Call a tool on the MCP server configured on pItem, and return one value from
 /// the result.
 ///
-///   pItem   config item name of the Agentic.Adapter.Operation host
+///   pItem   config item name of the Agentic.Adapter.Operation host, OR a plain
+///           URL. Naming an item borrows its configuration; giving a URL depends on
+///           no production at all, which is the honest way to see what this does
+///           and does not need
 ///   pTool   tool to invoke
 ///   pValue  the value passed as the tool's "code" argument
 ///   pPath   dotted path into the result, e.g. structuredContent.display
@@ -48,15 +51,21 @@ ClassMethod MCPCall(pItem As %String, pTool As %String, pValue As %String, pPath
     if not pValue:
         return ""
 
-    director = iris.cls("Ens.Director")
-    url = director.GetAdapterSettingValue(pItem, "ServerURL")
-    if not url:
-        host = director.GetAdapterSettingValue(pItem, "HTTPServer")
-        port = director.GetAdapterSettingValue(pItem, "HTTPPort") or "80"
-        path = director.GetAdapterSettingValue(pItem, "URL") or "/"
-        if not host:
-            return ""
-        url = "http://%s:%s%s" % (host, port, path)
+    # A URL depends on no production whatsoever. An item name borrows the settings
+    # of a configured item, which is a dependency on the interoperability
+    # CONFIGURATION - though not on a running production; see docs.
+    if (pItem or "").startswith("http://") or (pItem or "").startswith("https://"):
+        url = pItem
+    else:
+        director = iris.cls("Ens.Director")
+        url = director.GetAdapterSettingValue(pItem, "ServerURL")
+        if not url:
+            host = director.GetAdapterSettingValue(pItem, "HTTPServer")
+            port = director.GetAdapterSettingValue(pItem, "HTTPPort") or "80"
+            path = director.GetAdapterSettingValue(pItem, "URL") or "/"
+            if not host:
+                return ""
+            url = "http://%s:%s%s" % (host, port, path)
 
     def rpc(method, params, session=None):
         payload = json.dumps({"jsonrpc": "2.0", "id": 1,

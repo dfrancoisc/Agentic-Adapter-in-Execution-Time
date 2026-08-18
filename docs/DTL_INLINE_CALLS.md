@@ -32,6 +32,55 @@ Two things had to be true for this, and both were verified:
 - **The call itself can be made from a class method.** `Demo.MCPFunctions` speaks the
   MCP handshake and `tools/call` directly in Embedded Python.
 
+## Is the interoperability layer making the call?
+
+No. This was tested rather than argued, because the first test did not prove it.
+
+**The first test was not clean.** It ran in a namespace with the production up, and
+the DTL named a config item (`SnomedMCP`), so the function read that running item's
+settings to find the endpoint. That is a dependency on the interoperability
+configuration, and it hid what was really required.
+
+**The clean test.** Namespace `USER`, production **stopped**, only two classes
+loaded — the function set and a DTL naming the endpoint as a plain URL. No config
+item, no adapter, no production:
+
+```
+production=[] state=2        (stopped)
+
+in   OBX-5:  E11.9^WRONG DESCRIPTION^I10
+out  OBX-5:  E11.9^Diabetes mellitus type 2^I10
+```
+
+The HTTP call is made by the class method itself, in Embedded Python. Nothing in the
+interoperability runtime is involved in it.
+
+### What it does and does not need
+
+| | Needed? |
+|---|---|
+| A running production | **No** — verified with it stopped |
+| A production item for the MCP server | **No**, if you pass a URL. Yes, if you name an item to borrow its settings |
+| `Agentic.Adapter.MCP` | **No** — the function speaks MCP itself |
+| Anything else from this module | **No** |
+| An interoperability-enabled namespace | **Yes** — see below |
+
+The last row is not a property of this design. A DTL *is* an interoperability
+artifact: it extends `Ens.DataTransformDTL` and its generated code includes
+`EnsCompiler` and `Ensemble`. Attempting the same thing in a namespace without those
+fails at compile time with `No include file 'EnsCompiler'` — which is what happened
+when this was tried in a namespace that was not properly interoperability-enabled.
+
+So: if you are writing a DTL at all, you already have the interoperability layer.
+What this shows is that the *call* needs nothing beyond that — not the adapter, not
+an operation, not a running production.
+
+### Which is exactly the problem
+
+Needing none of that is the same sentence as getting none of it. No adapter means no
+inherited TLS, credentials or OAuth 2. No operation means no traced message. No
+production involvement means no retry, no failover, no alerting.
+
 ## What it gives up
 
 The function does **not** go through `Agentic.Adapter.MCP`, and cannot.
