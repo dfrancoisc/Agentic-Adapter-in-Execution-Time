@@ -476,31 +476,87 @@ flowchart LR
 
   SRC -->|message| BS
   BS -->|message| BP
-  BP <-->|"tools/list · tools/call"| MCPOP
-  BP <-->|"goal + catalog / chosen tool"| SELOP
+  BP -->|ToolRequest| MCPOP
+  MCPOP -->|ToolResponse| BP
+  BP -->|SelectRequest| SELOP
+  SELOP -->|SelectResponse| BP
   BP -->|improved message| BO
   BO -->|message| DST
-  MCPOP -.->|HTTPS| MCP
-  SELOP -.->|HTTPS| LLM
+  MCPOP -.->|"tools/list · tools/call"| MCP
+  MCP -.->|"catalogue · result"| MCPOP
+  SELOP -.->|"goal · catalogue"| LLM
+  LLM -.->|"tool · reason"| SELOP
 ```
 
 Solid lines are production messages — traced, individually retryable. Dashed lines
-are the only two places anything leaves the production, both over TLS.
+are the only two places anything leaves the production, both over TLS. Every external
+hop is a round trip: a request goes out and an answer comes back.
 
-One message through the production level, from a real trace:
+### The story of one message
 
-```
-1  HL7FileIn    -> EnrichCodes    the message arrives
-2  EnrichCodes  -> SnomedMCP      what tools does this server offer?
-3  SnomedMCP    -> EnrichCodes    the catalogue
-4  EnrichCodes  -> ToolSelector   the goal, the catalogue, the value
-5  ToolSelector -> EnrichCodes    the chosen tool — usually from cache
-6  EnrichCodes  -> SnomedMCP      call that tool
-7  SnomedMCP    -> EnrichCodes    the result
-8  EnrichCodes  -> HL7FileOut     the improved message
-```
+Seven steps, taken from a real trace. Each one says what happens and what it buys you.
 
-Steps 2 to 5 disappear when the tool is known in advance.
+**1 · The message arrives.** `Sending system → HL7FileIn`
+A standard business service — file, TCP with MLLP framing, FTP, REST. Nothing about
+it knows an MCP server exists.
+*Nothing changes at the edge.* The inbound half of a live interface is untouched, so
+adding a tool call does not mean re-testing how the interface receives.
+
+**2 · It is handed to your business process.** `HL7FileIn → EnrichCodes`
+An ordinary production message. Your process holds the logic: which values matter and
+what to do with an answer. For the common enrichment shape, subclass
+`Agentic.Adapter.EnrichmentProcess` and write two methods; for anything else, any
+process, BPL or operation can drive the steps below directly.
+*Separation of work.* Knowledge of the message format lives here and nowhere else —
+which is why the same adapter serves HL7, FHIR, X12 or a class of your own.
+
+**3 · Ask the server what it can do.** `EnrichCodes → SnomedMCP → MCP server → back`
+A standard request to a business operation carrying `Agentic.Adapter.MCP`. The adapter
+holds the address, TLS configuration, credential, protocol version, permitted tools,
+result path and error policy. It performs the handshake and sends `tools/list`.
+**What comes back** is the catalogue — every tool with its description and input
+schema, each annotated with whether this interface may call it — returned as a
+`ToolResponse`.
+*Configurability.* The address, the certificate and the secret are settings on a
+production item, not constants in code. *And discovery replaces documentation* — the
+tool name and result shape come from the server itself.
+
+**4 · Decide which tool to use.** `EnrichCodes → ToolSelector → Model provider → back`
+Only when the tool cannot be known until the message arrives. The goal and catalogue
+go to the model as text; a tool name and a reason come back as text. Selections are
+cached on what actually discriminates the case: measured over 50 messages, two model
+calls and forty-eight cache hits.
+*Auditability of a judgement call.* The one non-deterministic decision in the path is
+its own traced message, holding what was asked, what was answered, why, and whether it
+came from cache.
+
+**5 · Call the tool.** `EnrichCodes → SnomedMCP → MCP server → back`
+The same operation as step 3, now with `Action=call`. **What comes back** is the tool
+result, reduced by `ResultPath` to the one value you asked for, with the call duration
+attached.
+*Retry, failover and alerting come for free.* The adapter extends
+`EnsLib.HTTP.OutboundAdapter`, so an unreachable tool server behaves like every other
+unreachable endpoint: it retries, it fails over, it alerts, and the message is
+preserved. Nobody writes that code.
+
+**6 · Apply the answer.** `inside EnrichCodes`
+Your second method. Write the value in, reject the message, or route on it. The error
+policy decides what happens when a value cannot be resolved: fail, pass through, or
+substitute a default.
+*The decision about data stays in your code.* An unrecognised code is a data quality
+finding, not a broken interface — and which one it is for your interface is your call.
+
+**7 · Forward it.** `EnrichCodes → HL7FileOut → receiving system`
+A standard business operation. The receiving system gets an improved message through
+the channel it always used.
+*The interface still ends where it always did.* Everything in between is production
+configuration and one class, which is what makes this reusable across use cases rather
+than a terminology feature.
+
+Steps 3 and 4 usually disappear. Configure a tool name, or map a field in the message
+to one, and a message costs a single round trip — no catalogue fetch, no model, no
+cache. Discovery is for build time; the model is an escape hatch. Both are opt-in, and
+the path is deterministic without them.
 
 ### The model never touches the tool server
 
@@ -522,7 +578,8 @@ The catalogue reaches the model as text and its answer comes back as text. It ho
 no credential for the tool server and cannot invoke anything. A model that
 hallucinates a tool name is refused by configuration it cannot see.
 
-Richer diagrams: [docs/architecture.html](docs/architecture.html).
+Numbered sequence diagram showing every reply:
+[docs/architecture.html](docs/architecture.html).
 
 ---
 

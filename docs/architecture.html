@@ -125,6 +125,34 @@
   }
   ol.seq .what { color: var(--muted); font-size: 14.5px; }
 
+  /* ---- numbered story ---- */
+  ol.story { list-style: none; counter-reset: st; margin: 30px 0 0; padding: 0; }
+  ol.story > li {
+    counter-increment: st; position: relative;
+    padding: 0 0 26px 56px; margin-left: 15px;
+    border-left: 1px solid var(--line);
+  }
+  ol.story > li:last-child { border-left-color: transparent; padding-bottom: 2px; }
+  ol.story > li::before {
+    content: counter(st); position: absolute; left: -16px; top: -4px;
+    width: 31px; height: 31px; border-radius: 50%;
+    background: var(--ground); border: 1px solid var(--line-strong);
+    color: var(--accent); font-weight: 640; font-size: 13px;
+    display: grid; place-items: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  ol.story h4 { margin: 0 0 7px; font-size: 16.5px; font-weight: 640; letter-spacing: -.006em; }
+  ol.story p { margin: 0 0 10px; max-width: 66ch; font-size: 15px; }
+  ol.story p:last-child { margin-bottom: 0; }
+  ol.story .wire {
+    display: block; margin: 0 0 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; color: var(--muted);
+  }
+  ol.story .why { color: var(--muted); font-size: 14.5px; }
+  ol.story .why b { color: var(--ink); font-weight: 620; }
+  ol.story code { font-size: 13px; }
+
   /* ---- tables ---- */
   .tablewrap { overflow-x: auto; margin: 22px 0; }
   table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 560px; }
@@ -271,20 +299,24 @@
           <path d="M 640 402 L 640 356 L 436 356 L 436 314" marker-end="url(#ar-a)"/>
         </g>
 
-        <!-- boundary crossings (dashed) -->
+        <!-- boundary crossings, both directions (dashed) -->
         <g stroke="var(--muted)" fill="none" stroke-width="1.6" stroke-dasharray="5 4" color="var(--muted)">
-          <line x1="774" y1="105" x2="876" y2="105" marker-end="url(#ar)"/>
-          <line x1="774" y1="435" x2="876" y2="435" marker-end="url(#ar)"/>
+          <line x1="774" y1="96"  x2="876" y2="96"  marker-end="url(#ar)"/>
+          <line x1="876" y1="124" x2="774" y2="124" marker-end="url(#ar)"/>
+          <line x1="774" y1="426" x2="876" y2="426" marker-end="url(#ar)"/>
+          <line x1="876" y1="454" x2="774" y2="454" marker-end="url(#ar)"/>
         </g>
 
         <!-- labels -->
         <g font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">
-          <text x="516" y="122">tools/list · tools/call</text>
-          <text x="516" y="192" text-anchor="start">catalog · result</text>
-          <text x="444" y="434">goal + catalog</text>
-          <text x="452" y="348">chosen tool</text>
-          <text x="825" y="98" text-anchor="middle">HTTPS</text>
-          <text x="825" y="428" text-anchor="middle">HTTPS</text>
+          <text x="588" y="122" text-anchor="end">ToolRequest</text>
+          <text x="516" y="192" text-anchor="start">ToolResponse</text>
+          <text x="444" y="434">SelectRequest</text>
+          <text x="452" y="348">SelectResponse</text>
+          <text x="825" y="88"  text-anchor="middle" font-size="10.5">tools/list · call</text>
+          <text x="825" y="141" text-anchor="middle" font-size="10.5">catalogue · result</text>
+          <text x="825" y="418" text-anchor="middle" font-size="10.5">goal · catalogue</text>
+          <text x="825" y="471" text-anchor="middle" font-size="10.5">tool · reason</text>
           <text x="352" y="262" text-anchor="middle">msg</text>
           <text x="592" y="262" text-anchor="middle">msg</text>
         </g>
@@ -296,38 +328,292 @@
     </div>
     <figcaption>
       Five hosts. Only the two operations reach outside, and each carries one adapter
-      for one external system. The business process is the only component that talks
-      to both — and the only one you write.
+      for one external system. Every external hop is a round trip: a request leaves and
+      an answer comes back. The business process is the only component that talks to
+      both — and the only one you write. The numbered walk-through below follows one
+      message through all of it.
     </figcaption>
   </figure>
 
-  <h2>What actually happens to one message</h2>
+  <h2>The story of one message</h2>
 
   <div class="prose">
     <p>
-      Every hop below is a real production message, recorded in the Message Viewer
-      with its own timing, its own body and its own retry behaviour. This is a trace
-      taken from a running instance, not an illustration.
+      Seven steps. Every arrow below is a real hop, and every request is drawn with
+      the reply that comes back to it — the catalogue, the chosen tool, the result.
+      Four of the arrows in each external round trip are production messages, which
+      means each one is recorded in the Message Viewer with its own body, its own
+      timing and its own retry behaviour.
     </p>
   </div>
 
-  <ol class="seq">
-    <li><span class="hop">HL7FileIn → EnrichCodes</span><span class="what">the message arrives and is parsed</span></li>
-    <li><span class="hop">EnrichCodes → SnomedMCP</span><span class="what">what tools does this server offer?</span></li>
-    <li><span class="hop">SnomedMCP → EnrichCodes</span><span class="what">the catalog, with input schemas</span></li>
-    <li><span class="hop">EnrichCodes → ToolSelector</span><span class="what">the goal, the catalog, and the value in hand</span></li>
-    <li><span class="hop">ToolSelector → EnrichCodes</span><span class="what">the chosen tool, and why — usually from cache</span></li>
-    <li><span class="hop">EnrichCodes → SnomedMCP</span><span class="what">call that tool with these arguments</span></li>
-    <li><span class="hop">SnomedMCP → EnrichCodes</span><span class="what">the result</span></li>
-    <li><span class="hop">EnrichCodes → HL7FileOut</span><span class="what">the improved message, forwarded</span></li>
+  <figure>
+    <div class="canvas">
+      <svg viewBox="0 0 1240 824" role="img"
+           aria-label="A numbered sequence over six lifelines: business service, business process, MCP business operation, MCP server, selector business operation and model provider. Seven steps run down the page. Each external call is drawn as a request leaving and a labelled reply coming back: the tool catalogue returns from the MCP server, the chosen tool name returns from the model provider, and the tool result returns from the MCP server before the enriched message is forwarded out.">
+        <defs>
+          <marker id="sq-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+          </marker>
+          <marker id="sq-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)"/>
+          </marker>
+        </defs>
+        <!-- step bands -->
+        <rect x="0" y="108" width="1240" height="40" rx="8" fill="var(--ground)"/>
+        <rect x="0" y="212" width="1240" height="154" rx="8" fill="var(--ground)"/>
+        <rect x="0" y="544" width="1240" height="154" rx="8" fill="var(--ground)"/>
+        <rect x="0" y="762" width="1240" height="40" rx="8" fill="var(--ground)"/>
+        <circle cx="26" cy="134" r="13" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="26" y="138" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, Menlo, monospace">1</text>
+        <circle cx="26" cy="186" r="13" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="26" y="190" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, Menlo, monospace">2</text>
+        <circle cx="26" cy="238" r="13" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="26" y="242" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, Menlo, monospace">3</text>
+        <circle cx="26" cy="404" r="13" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="26" y="408" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, Menlo, monospace">4</text>
+        <circle cx="26" cy="570" r="13" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="26" y="574" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, Menlo, monospace">5</text>
+        <circle cx="26" cy="736" r="13" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="26" y="740" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, Menlo, monospace">6</text>
+        <circle cx="26" cy="788" r="13" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="26" y="792" text-anchor="middle" font-size="12.5" font-weight="600" fill="var(--accent)" font-family="ui-monospace, Menlo, monospace">7</text>
+        <!-- lifelines -->
+        <line x1="200" y1="106" x2="200" y2="810" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+        <line x1="390" y1="106" x2="390" y2="810" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+        <line x1="580" y1="106" x2="580" y2="810" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+        <line x1="770" y1="106" x2="770" y2="810" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+        <line x1="970" y1="106" x2="970" y2="810" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+        <line x1="1150" y1="106" x2="1150" y2="810" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+        <rect x="125" y="48" width="150" height="58" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="200" y="68" text-anchor="middle" font-size="12.5" fill="var(--ink)">Business service</text>
+        <text x="200" y="90" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">HL7FileIn</text>
+        <rect x="315" y="48" width="150" height="58" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="390" y="68" text-anchor="middle" font-size="12.5" fill="var(--ink)">Business process</text>
+        <text x="390" y="84" text-anchor="middle" font-size="10.5" fill="var(--accent-ink)" font-family="ui-monospace, Menlo, monospace">your logic</text>
+        <text x="390" y="99" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">EnrichCodes</text>
+        <rect x="505" y="48" width="150" height="58" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="580" y="68" text-anchor="middle" font-size="12.5" fill="var(--ink)">Business operation</text>
+        <text x="580" y="84" text-anchor="middle" font-size="10.5" fill="var(--accent-ink)" font-family="ui-monospace, Menlo, monospace">+ MCP adapter</text>
+        <text x="580" y="99" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">SnomedMCP</text>
+        <rect x="695" y="48" width="150" height="58" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="770" y="68" text-anchor="middle" font-size="12.5" fill="var(--ink)">Business operation</text>
+        <text x="770" y="84" text-anchor="middle" font-size="10.5" fill="var(--accent-ink)" font-family="ui-monospace, Menlo, monospace">+ LLM adapter</text>
+        <text x="770" y="99" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">ToolSelector</text>
+        <rect x="895" y="48" width="150" height="58" rx="8" fill="var(--surface-2)" stroke="var(--line-strong)"/>
+        <text x="970" y="68" text-anchor="middle" font-size="12.5" fill="var(--ink)">MCP server</text>
+        <text x="970" y="90" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">the tool host</text>
+        <rect x="1075" y="48" width="150" height="58" rx="8" fill="var(--surface-2)" stroke="var(--line-strong)"/>
+        <text x="1150" y="68" text-anchor="middle" font-size="12.5" fill="var(--ink)">Model provider</text>
+        <text x="1150" y="90" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">Bedrock</text>
+        <!-- messages -->
+        <line x1="60" y1="132" x2="194" y2="132" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="60" y1="132" x2="194" y2="132" stroke="var(--accent)" stroke-width="1.9" marker-end="url(#sq-a)"/>
+        <text x="130" y="123" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">HL7 file arrives</text>
+        <line x1="200" y1="184" x2="384" y2="184" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="200" y1="184" x2="384" y2="184" stroke="var(--accent)" stroke-width="1.9" marker-end="url(#sq-a)"/>
+        <text x="295" y="175" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--surface)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">standard production message</text>
+        <line x1="390" y1="236" x2="574" y2="236" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="390" y1="236" x2="574" y2="236" stroke="var(--accent)" stroke-width="1.9" marker-end="url(#sq-a)"/>
+        <text x="485" y="227" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">ToolRequest  Action=list</text>
+        <line x1="580" y1="274" x2="964" y2="274" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="580" y1="274" x2="964" y2="274" stroke="var(--muted)" stroke-width="1.7" marker-end="url(#sq-m)"/>
+        <text x="775" y="265" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">initialize · tools/list</text>
+        <line x1="970" y1="312" x2="586" y2="312" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="970" y1="312" x2="586" y2="312" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#sq-m)"/>
+        <text x="775" y="303" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">catalogue + inputSchema</text>
+        <line x1="580" y1="350" x2="396" y2="350" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="580" y1="350" x2="396" y2="350" stroke="var(--accent)" stroke-width="1.7" stroke-dasharray="6 4" marker-end="url(#sq-a)"/>
+        <text x="485" y="341" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">ToolResponse  ResultJSON</text>
+        <line x1="390" y1="402" x2="764" y2="402" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="390" y1="402" x2="764" y2="402" stroke="var(--accent)" stroke-width="1.9" marker-end="url(#sq-a)"/>
+        <text x="580" y="393" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--surface)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">SelectRequest  goal + catalogue</text>
+        <line x1="770" y1="440" x2="1144" y2="440" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="770" y1="440" x2="1144" y2="440" stroke="var(--muted)" stroke-width="1.7" marker-end="url(#sq-m)"/>
+        <text x="960" y="431" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--surface)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">prompt  (skipped on a cache hit)</text>
+        <line x1="1150" y1="478" x2="776" y2="478" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="1150" y1="478" x2="776" y2="478" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#sq-m)"/>
+        <text x="960" y="469" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--surface)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">tool name + reason</text>
+        <line x1="770" y1="516" x2="396" y2="516" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="770" y1="516" x2="396" y2="516" stroke="var(--accent)" stroke-width="1.7" stroke-dasharray="6 4" marker-end="url(#sq-a)"/>
+        <text x="580" y="507" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--surface)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">SelectResponse  ToolName · Reason · FromCache</text>
+        <line x1="390" y1="568" x2="574" y2="568" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="390" y1="568" x2="574" y2="568" stroke="var(--accent)" stroke-width="1.9" marker-end="url(#sq-a)"/>
+        <text x="485" y="559" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">ToolRequest  Action=call</text>
+        <line x1="580" y1="606" x2="964" y2="606" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="580" y1="606" x2="964" y2="606" stroke="var(--muted)" stroke-width="1.7" marker-end="url(#sq-m)"/>
+        <text x="775" y="597" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">tools/call</text>
+        <line x1="970" y1="644" x2="586" y2="644" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="970" y1="644" x2="586" y2="644" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#sq-m)"/>
+        <text x="775" y="635" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">result  content · structuredContent</text>
+        <line x1="580" y1="682" x2="396" y2="682" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="580" y1="682" x2="396" y2="682" stroke="var(--accent)" stroke-width="1.7" stroke-dasharray="6 4" marker-end="url(#sq-a)"/>
+        <text x="485" y="673" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">ToolResponse  ResultJSON</text>
+        <path d="M 390 725 L 344 725 L 344 743 L 386 743" fill="none" stroke="var(--surface)" stroke-width="7"/>
+        <path d="M 390 725 L 344 725 L 344 743 L 386 743" fill="none" stroke="var(--accent)" stroke-width="1.9" marker-end="url(#sq-a)"/>
+        <text x="332" y="738" text-anchor="end" font-size="11.5" fill="var(--muted)" stroke="var(--surface)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">write the value back into the message</text>
+        <line x1="390" y1="786" x2="66" y2="786" stroke="var(--surface)" stroke-width="7"/>
+        <line x1="390" y1="786" x2="66" y2="786" stroke="var(--accent)" stroke-width="1.9" marker-end="url(#sq-a)"/>
+        <text x="225" y="777" text-anchor="middle" font-size="11.5" fill="var(--muted)" stroke="var(--ground)" stroke-width="4" paint-order="stroke" font-family="ui-monospace, Menlo, monospace">enriched message → HL7FileOut → receiving system</text>
+        <!-- production boundary -->
+        <line x1="870" y1="34" x2="870" y2="810" stroke="var(--line-strong)" stroke-width="1.4" stroke-dasharray="7 5"/>
+        <text x="862" y="26" text-anchor="end" font-size="10.5" letter-spacing="1.4" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">INSIDE THE PRODUCTION</text>
+        <text x="878" y="26" font-size="10.5" letter-spacing="1.4" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">OUTSIDE</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="border-top:2px solid var(--accent)"></i> production request — traced, retryable</span>
+      <span><i class="swatch" style="border-top:2px dashed var(--accent)"></i> production response — traced</span>
+      <span><i class="swatch" style="border-top:2px dashed var(--muted)"></i> crosses the boundary over TLS</span>
+    </div>
+    <figcaption>
+      Read top to bottom. The dashed line down the middle is the production boundary:
+      everything to its left is a configured business host, everything to its right is
+      somebody else's server. Steps <span class="k">3</span> and <span class="k">4</span>
+      are optional — see the note after step 5.
+    </figcaption>
+  </figure>
+
+  <ol class="story">
+
+    <li>
+      <h4>The message arrives</h4>
+      <span class="wire">Sending system &rarr; HL7FileIn</span>
+      <p>
+        A standard business service. File, TCP with MLLP framing, FTP, REST — whatever
+        the sending system speaks. Nothing about it is aware that an MCP server exists.
+      </p>
+      <p class="why">
+        <b>Nothing changes at the edge.</b> The inbound half of a live interface is
+        untouched, so adding a tool call to an interface already in production does not
+        mean re-testing how it receives.
+      </p>
+    </li>
+
+    <li>
+      <h4>It is handed to your business process</h4>
+      <span class="wire">HL7FileIn &rarr; EnrichCodes</span>
+      <p>
+        An ordinary production message, delivered the ordinary way. Your process holds
+        the logic: which values in this message matter, and what to do with an answer.
+        For the common enrichment shape — find several values, improve each, forward the
+        message — subclass <code>Agentic.Adapter.EnrichmentProcess</code> and write two
+        methods. For anything else, any process, BPL or operation can drive the steps
+        below directly.
+      </p>
+      <p class="why">
+        <b>Separation of work.</b> Knowledge of the message format lives here and
+        nowhere else. The adapter never learns what HL7 is, which is exactly why the
+        same adapter serves FHIR, X12, or a message class of your own without a line of
+        change.
+      </p>
+    </li>
+
+    <li>
+      <h4>Ask the server what it can do</h4>
+      <span class="wire">EnrichCodes &rarr; SnomedMCP &rarr; MCP server &rarr; back again</span>
+      <p>
+        A standard request to a business operation carrying
+        <code>Agentic.Adapter.MCP</code>. The adapter holds the server address, the TLS
+        configuration, the credential, the protocol version, the permitted tools, the
+        result path and the error policy. It performs the MCP handshake and sends
+        <code>tools/list</code>.
+      </p>
+      <p>
+        <strong>What comes back</strong> is the catalogue: every tool the server offers,
+        with its description and its input schema, each entry annotated with whether
+        this interface is permitted to call it. That returns to your process as a
+        <code>ToolResponse</code>.
+      </p>
+      <p class="why">
+        <b>Configurability.</b> The address, the certificate and the secret are settings
+        on a production item, not constants in code. Repoint the item and every caller
+        follows. <b>And discovery replaces documentation</b> — the tool name and result
+        shape you need for the next steps come from the server itself, not from a vendor
+        PDF.
+      </p>
+    </li>
+
+    <li>
+      <h4>Decide which tool to use</h4>
+      <span class="wire">EnrichCodes &rarr; ToolSelector &rarr; Model provider &rarr; back again</span>
+      <p>
+        Only when the right tool cannot be known until the message arrives. The goal and
+        the catalogue go to the model as text; a tool name and a reason come back as
+        text. The model holds no credential for the tool server and has no network path
+        to it — it names a tool, and <code>AllowedTools</code> is checked between its
+        answer and the call.
+      </p>
+      <p>
+        Selections are cached on whatever actually discriminates the case — the coding
+        system, not the code. Measured over 50 messages: two model calls, forty-eight
+        cache hits.
+      </p>
+      <p class="why">
+        <b>Auditability of a judgement call.</b> The one non-deterministic decision in
+        the whole path is its own traced message. When a selection later looks wrong,
+        the trace holds what the model was asked, what it answered, why, and whether the
+        answer came from cache.
+      </p>
+    </li>
+
+    <li>
+      <h4>Call the tool</h4>
+      <span class="wire">EnrichCodes &rarr; SnomedMCP &rarr; MCP server &rarr; back again</span>
+      <p>
+        The same operation as step 3, now with <code>Action=call</code> and the
+        arguments. <strong>What comes back</strong> is the tool result — content blocks
+        and structured content — reduced by <code>ResultPath</code> to the single value
+        your process asked for, with the call duration attached.
+      </p>
+      <p class="why">
+        <b>Retry, failover and alerting come for free.</b> The adapter extends
+        <code>EnsLib.HTTP.OutboundAdapter</code>, so a slow or unreachable tool server
+        behaves like every other unreachable endpoint in the production: it retries, it
+        fails over, it raises an alert, and the message is preserved rather than lost.
+        Nobody writes that code.
+      </p>
+    </li>
+
+    <li>
+      <h4>Apply the answer</h4>
+      <span class="wire">inside EnrichCodes</span>
+      <p>
+        Your second method. Write the value into the message, or reject the message, or
+        route on it — the shipped error policy decides what happens when a value cannot
+        be resolved: fail the message, pass it through unchanged, or substitute a
+        default.
+      </p>
+      <p class="why">
+        <b>The decision about data stays in your code.</b> An unrecognised code is a
+        data quality finding, not a broken interface, and which of those it is for
+        <em>your</em> interface is a call only you can make.
+      </p>
+    </li>
+
+    <li>
+      <h4>Forward it</h4>
+      <span class="wire">EnrichCodes &rarr; HL7FileOut &rarr; receiving system</span>
+      <p>
+        A standard business operation. The receiving system gets an improved message
+        through the same channel it always used.
+      </p>
+      <p class="why">
+        <b>The interface still ends where it always did.</b> Everything between the two
+        ends is production configuration and one class — which is what makes this
+        reusable across use cases rather than a bespoke terminology feature.
+      </p>
+    </li>
+
   </ol>
 
   <div class="note">
     <p>
-      Steps 2 to 5 disappear when the tool is known in advance. Configure a tool name,
-      or map a field in the message to one, and a message costs a single call — no
-      catalog fetch, no model, no cache. The model is an escape hatch for when the
-      right tool genuinely cannot be known until the message arrives.
+      <strong>Steps 3 and 4 usually disappear.</strong> Configure a tool name on the
+      operation, or map a field in the message to one, and a message costs a single
+      round trip — no catalogue fetch, no model, no cache. Discovery is for build time;
+      the model is an escape hatch for when the right tool genuinely cannot be known in
+      advance. Both are opt-in, and the path is deterministic without them.
     </p>
   </div>
 
