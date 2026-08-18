@@ -42,7 +42,6 @@ XData ProductionDefinition
 
   <Item Name="SnomedMCP" Category="Enrichment" ClassName="Agentic.Adapter.Operation" PoolSize="1" Enabled="true" Foreground="false" Comment="Terminology MCP server" LogTraceEvents="true" Schedule="">
     <Setting Target="Adapter" Name="ServerURL">http://127.0.0.1:8765/</Setting>
-    <Setting Target="Adapter" Name="AllowedTools">translate_*</Setting>
     <Setting Target="Adapter" Name="OnErrorAction">fail</Setting>
     <Setting Target="Adapter" Name="ResponseTimeout">15</Setting>
   </Item>

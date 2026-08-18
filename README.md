@@ -220,10 +220,21 @@ in host, port and path for you and picks the default TLS configuration for `http
 Set `HTTPServer` / `HTTPPort` / `URL` / `SSLConfig` by hand only if you need finer
 control.
 
-Leave `AllowedTools` blank and every tool the server offers can be called — the
-right default, since you usually do not know a server's tools in advance. Fill it in
-only when you do know and want this interface restricted: plain tool names, comma
-separated, `*` as a wildcard (`lookup_*`, or `translate_icd, translate_loinc`).
+Leave `AllowedTools` blank. You do not know a server's tool names before you call
+it — finding out is what the server is for — and every shipped example leaves it
+empty for exactly that reason.
+
+It exists for the case where you *do* know and want this interface restricted to a
+subset, for instance a server that also exposes tools that write. Then, and only
+then, plain tool names with `*` as a wildcard:
+
+```
+lookup_*                          anything beginning lookup_
+translate_icd, translate_loinc    exactly these two
+```
+
+Not regular expressions. Use the `list` action to see what a server actually offers
+before restricting anything.
 
 **ToolSelector** — Outbound Host, `Agentic.Adapter.SelectorOperation`
 
