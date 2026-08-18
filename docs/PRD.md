@@ -10,6 +10,13 @@ Product Area:       IRIS for Health / Health Connect — Interoperability Produc
 
 ---
 
+> **How to read this document.** Sections 1 to 9 describe the need, from the
+> customer's perspective, and are deliberately silent on how it might be met. Section
+> 10 is a **proposed** solution — one shape that satisfies those needs, offered for
+> challenge. If section 10 is wrong, sections 1 to 9 still stand.
+
+---
+
 ## 1. Problem statement
 
 ### The customer problem
@@ -58,10 +65,10 @@ scripting step.
 
 ### Outcome hypothesis
 
-If Maria can call an external tool service by configuring a production item rather
-than writing code, adding an external capability becomes a task measured in minutes
-rather than days, and it inherits TLS, credential, OAuth 2 and audit behaviour by
-default instead of by discipline.
+If Maria can reach an external tool service by configuring it rather than by writing
+code, adding an external capability becomes a task measured in minutes rather than
+days, and it inherits TLS, credential, OAuth 2 and audit behaviour by default instead
+of by discipline.
 
 Leading indicator: time from "we should enrich this field" to a working, traced call
 in a test production.
@@ -73,13 +80,13 @@ in a test production.
 | Risk dimension | Assessment | Mitigation |
 |---|---|---|
 | Value — will they use it? | Medium | MCP adoption is early. Mitigated by working for any HTTP JSON-RPC tool service, not only AI ones, and by a low build cost |
-| Usability — can they figure it out? | Low | It is an adapter, configured like every other IRIS adapter, with setting names that match the HTTP adapter wherever the concept is the same |
-| Feasibility | Low | Built and running: tool invocation, discovery, model-based selection, caching, and a 50-message benchmark |
+| Usability — can they figure it out? | Low | Configured the way every other outbound connection in a production is configured, using the vocabulary an interface engineer already has |
+| Feasibility | Low | A working prototype exists and is described in §10 |
 | Business viability | Low | Standalone module. No new licensing, runtime, or deployment change |
-| Regulatory and compliance | **Medium-High** | The adapter makes it easy to send clinical data to a third party. See §5 |
+| Regulatory and compliance | **Medium-High** | Making an external call a configuration step also makes sending clinical data to a third party easy. See §5 |
 
-The regulatory row governs adoption, not the technology. Nothing about the adapter
-is unsafe in itself, but it makes sending message content to an external endpoint a
+The regulatory row governs adoption, not the technology. Nothing here is unsafe in
+itself, but it turns sending message content to an external endpoint into a
 configuration step. A customer sending PHI to a third party needs a business
 associate agreement, needs to send the minimum necessary, and needs an audit trail.
 The product's job is to make the safe path the easy one.
@@ -114,41 +121,16 @@ Priya — Security and Compliance Officer
 
 ---
 
-## 3b. What is a feature and what is a customer's configuration
-
-Stated because it has been a recurring source of confusion in review.
-
-| | |
-|---|---|
-| **Features** | Four. In the production level: MCP connectivity (an outbound adapter and its operation), model-chosen tools (an LLM adapter and a selector operation), and an extendable enrichment process. In the transformation level: a pair of functions. Shipped, generic, installed by IPM |
-| **Customer configuration** | Which server, which tool, which credential, which field. Set in the Management Portal |
-| **Customer code** | Where the values live in their message and what to do with the answer |
-| **Examples** | Everything shipped under `Demo.*`. Not installed, not supported |
-
-The features are grouped by the two levels at which an interface can reach out.
-
-*Production level features* — invoke agents or MCP servers while exchanging data, on
-interface execution time. These are the three that hang off a business host: MCP
-connectivity, model-chosen tools, and the enrichment process.
-
-*Transformation level features* — invoke agents or MCP servers while transforming
-data or applying rules, on data execution time. This is the function pair, and it
-exists as functions rather than as an adapter because an adapter has to hang off a
-business host and a transformation is not one. Terminology is used throughout the examples because it is
-concrete and verifiable, not because the product is about terminology.
-
----
-
 ## 4. User stories
 
 Tagged P0 for launch, P1 important, P2 desirable.
 
 ### Connecting to a service
 
-- **P0** — As Maria, I need to point a production item at an external tool service
-  by pasting the URL from its documentation, so that adding a service is
-  configuration rather than a development ticket, and I am not decomposing an
-  address into host, port and path by hand.
+- **P0** — As Maria, I need to register an external tool service by pasting the URL
+  from its documentation, so that adding a service is configuration rather than a
+  development ticket, and I am not decomposing an address into host, port and path by
+  hand.
 - **P0** — As Priya, I need credentials to resolve from the IRIS credential store or
   an OAuth 2 client configuration, so that no secret is typed into a setting, written
   to a production definition, or committed to source control.
@@ -176,7 +158,7 @@ Tagged P0 for launch, P1 important, P2 desirable.
 - **P0** — As Maria, I need to write the answer back into the message and forward it,
   so that the interface produces an improved message rather than a report.
 - **P1** — As Maria, I need one configured service to serve several call sites with
-  different tools, so that I am not creating a production item per tool.
+  different tools, so that I am not repeating the configuration once per tool.
 - **P2** — As Maria, I need to call the service from inside a transformation, where
   field-level work naturally lives. *(Known obstacle — see the technical
   specification. Not in launch scope.)*
@@ -205,8 +187,9 @@ configuration and the credential from".
 
 - **P0** — As Maria, I need to call an MCP tool from inside a DTL, because that is
   where field-level work lives and I do not want a business process for a lookup.
-- **P0** — As Maria, I need one shipped function rather than a class method I write
-  myself, so that ninety interfaces do not end up with ninety MCP clients.
+- **P0** — As Maria, I need one supported, shipped mechanism rather than something
+  each team writes for itself, so that ninety interfaces do not end up with ninety
+  hand-rolled clients.
 - **P0** — As Maria, I need that function to work with any tool on any server — the
   argument name and the result shape come from the server's catalogue, not from
   assumptions baked into the function.
@@ -223,12 +206,6 @@ configuration and the credential from".
 - **P0** — As Maria, I need to know, before I choose this route, what it does not
   give me — no traced message, no retry, no OAuth 2 — so that I can choose the
   business process when those matter.
-
-The resolution: the settings live on an ordinary production item, and the
-transformation names it. The item may be disabled — it then acts purely as a
-configuration record — and the same item serves the business process level when one
-is present. A transformation therefore carries no endpoint, no certificate reference
-and no secret; it carries a name.
 
 ### Keeping it safe
 
@@ -278,9 +255,9 @@ and no secret; it carries a name.
 - **P1** — As Maria, I need the same approach to work for HL7, FHIR and X12, so that
   learning it once pays off across the estate.
 - **P0** — As Maria, I need to call an MCP tool from anywhere in a production —
-  my own process, a BPL, an operation I already have — and not only through a
-  helper class that assumes a particular shape of work, so that the mechanism fits
-  my interface rather than the other way round.
+  my own process, a BPL, an operation I already have — and not only through something
+  that assumes a particular shape of work, so that the mechanism fits my interface
+  rather than the other way round.
 - **P1** — As Maria, I need to write that part in ObjectScript or in Python,
   whichever my team maintains, without a performance penalty for choosing.
 
@@ -289,15 +266,11 @@ and no secret; it carries a name.
 ## 5. Non-functional and healthcare requirements
 
 **Performance**
-- Adapter overhead, excluding the remote service, negligible against network time.
-  Measured: 50 messages and 400 traced production messages in about 3 s with
-  selections cached.
-- The implementation language of the process must not be a performance
-  consideration. Measured: 3.59 s versus 3.65 s over 50 messages for Python and
-  ObjectScript run concurrently in separate namespaces — a difference under 2%, and
-  about 15 µs per message when isolated to the methods themselves.
-- Model-based selection must be cached, or it is not viable at interface volumes.
-  Measured: 2 model calls served 50 messages.
+- Overhead beyond the remote service itself must be negligible against network time.
+- The implementation language an interface team chooses must not be a performance
+  consideration.
+- Where a model is involved, the same judgement must not be paid for on every
+  message, or the cost is not viable at interface volumes.
 - Per-call timeout configurable and below the calling host's response timeout.
 
 **Security**
@@ -324,7 +297,7 @@ and no secret; it carries a name.
 ## 6. Anti-goals
 
 - Not an MCP server. Exposing IRIS tools to external clients is a different product.
-- Not an agent framework. The adapter calls tools; it does not plan or loop.
+- Not an agent framework. It calls tools; it does not plan or loop.
 - Not a transformation engine. What to do with an answer belongs to the interface.
 - Not `stdio` transport. Spawning child processes from an IRIS job is a materially
   different operational story.
@@ -352,10 +325,10 @@ and no secret; it carries a name.
 |---|---|---|---|
 | 1 | Minimum supported version is set at 2026.2 and enforced at install. Whether earlier releases could be supported is untested | Eng | Open |
 | 2 | Does any target service need OAuth 2 flows beyond client credentials? | Eng | Open |
-| 3 | Should one production item ever fan out across several services? | PM | Open |
+| 3 | Should one configured service ever fan out across several endpoints? | PM | Open |
 | 4 | Guidance on clinical data leaving the boundary — formal position, or reviewed documentation? | Compliance | Open |
 | 5 | Distribution: internal module, Open Exchange, or supported component? | PM | Open |
-| 6 | Calling from inside a transformation — function set, or a custom DTL action? Feasibility of the latter is unestablished | Eng | Open |
+| 6 | Calling from inside a transformation — which mechanism best satisfies the stories in §4? Candidates and their trade-offs in §10.4 | PM, Eng | Open |
 
 ---
 
@@ -367,7 +340,186 @@ integration. Neither offers a configured, protocol-aware component with an inher
 enterprise security model.
 
 The differentiator is not that IRIS can call an HTTP service — every engine can. It
-is that the call is a configured production item that inherits TLS, credential and
+is that the call can be configured rather than coded, inherits TLS, credential and
 OAuth 2 handling, appears in the Visual Trace, can be restricted to an allow-listed
 set of tools, and — when a model is involved — records what it was asked and why it
 answered as it did.
+
+---
+
+## 10. Proposed solution
+
+Everything above is the need. This section is a **proposal** for meeting it — one
+shape that satisfies the stories in §4, offered for challenge rather than as a
+specification. A different shape that satisfies the same stories is equally valid;
+what is not negotiable is §4, §5 and §6.
+
+A working prototype of this proposal exists, which is why §2 rates feasibility low.
+Its measured behaviour is at the end of this section.
+
+### 10.1 Two moments, not one
+
+An interface can reach out at two distinct moments, and the stories in §4 split along
+exactly that line.
+
+- **Production level** — reach out while exchanging data, at interface execution
+  time. This is where §4's *Connecting to a service*, *Making the call*, *Choosing the
+  right tool* and *Operating it* stories live. The call is an event in its own right,
+  so it can be traced, retried and failed over.
+- **Transformation level** — reach out while transforming data or applying rules, at
+  data execution time. This is where §4's *Calling from a transformation or a rule*
+  stories live. The call is part of a mapping, so it is cheap and inline, and it
+  cannot be an independently retried event.
+
+The proposal covers both because §4 asks for both, and because the trade-off between
+them is a decision the interface engineer should be able to make per interface rather
+than have made for them.
+
+### 10.2 What the customer configures, and what the customer writes
+
+The distinction matters because it is what the stories about maintenance and reuse
+actually turn on.
+
+| | |
+|---|---|
+| **Shipped, generic** | Connectivity and protocol handling, tool discovery, optional model-based tool selection, and a reusable orchestration base — none of which knows what HL7, FHIR or X12 is |
+| **Customer configuration** | Which service, which tool, which credential, which field — set in the Management Portal |
+| **Customer code** | Only where the values live in their message, and what to do with the answer |
+| **Examples** | Reference material. Not installed, not supported |
+
+### 10.3 The proposed flow, step by step
+
+Seven steps. Each one states what happens and, more importantly, which need from §4
+it is there to satisfy.
+
+```mermaid
+sequenceDiagram
+    participant SRC as Sending system<br/>outside
+    participant BS as Business service<br/>HL7FileIn
+    participant BP as Business process<br/>EnrichCodes
+    participant OP as Business operation<br/>+ MCP adapter<br/>SnomedMCP
+    participant SRV as MCP server<br/>outside
+    participant SEL as Business operation<br/>+ LLM adapter<br/>ToolSelector
+    participant LLM as Model provider<br/>outside
+    participant BO as Business operation<br/>HL7FileOut
+    participant DST as Receiving system<br/>outside
+
+    SRC->>BS: 1 · HL7 file arrives
+    BS->>BP: 2 · standard production message
+
+    BP->>OP: 3 · ToolRequest Action=list
+    OP->>SRV: initialize · tools/list over TLS
+    SRV-->>OP: catalogue + inputSchema
+    OP-->>BP: ToolResponse ResultJSON
+
+    BP->>SEL: 4 · SelectRequest goal + catalogue
+    SEL->>LLM: prompt over TLS — skipped on a cache hit
+    LLM-->>SEL: tool name + reason
+    SEL-->>BP: SelectResponse ToolName · Reason · FromCache
+
+    BP->>OP: 5 · ToolRequest Action=call
+    OP->>SRV: tools/call over TLS
+    SRV-->>OP: result — content · structuredContent
+    OP-->>BP: ToolResponse ResultJSON · DurationMs
+
+    Note over BP: 6 · write the value back into the message
+
+    BP->>BO: 7 · enriched message
+    BO->>DST: delivered
+```
+Solid arrows are requests, dashed arrows are the replies. Everything except the
+participants marked `outside` is a component the customer configured.
+
+**1 · The message arrives.** A standard business service — file, TCP with MLLP
+framing, FTP, REST — exactly as it does today.
+*Satisfies:* nothing changes at the edge, so adding an external call to a live
+interface does not mean re-testing how that interface receives.
+
+**2 · It is handed to a business process.** The process holds the interface's own
+logic: which values matter, and what to do with an answer.
+*Satisfies:* the §4 stories about writing only the part specific to my message, and
+about the same approach working for HL7, FHIR and X12 — knowledge of the message
+format lives in one place and nowhere else.
+
+**3 · Ask the service what it can do.** A standard request to a configured component
+that holds the address, TLS configuration, credential, protocol version, permitted
+tools and error policy. **What comes back** is the catalogue: every tool with its
+description and input schema, each annotated with whether this interface may call it.
+*Satisfies:* the §4 stories about discovering what a service offers without reading a
+vendor PDF, about seeing every tool even where the interface may only use some, and
+about the address and secret living in configuration rather than in code.
+
+**4 · Decide which tool to use — only when it cannot be known in advance.** The goal
+and the catalogue go to a model as text; a tool name and a reason come back as text.
+The model holds no credential for the tool service and has no path to it; the
+allow-list is checked between its answer and the call. The judgement is cached on
+whatever discriminates the case, not on the value.
+*Satisfies:* the §4 stories about the model being unable to invoke anything directly,
+about paying once for a judgement that is the same for every message, and about
+recording what was asked and why it answered as it did.
+
+**5 · Call the tool.** The same configured component as step 3, now invoking. **What
+comes back** is the tool result, reduced to the single value the interface asked for,
+with the call duration attached.
+*Satisfies:* the §4 stories about getting an answer as a value rather than a protocol
+envelope, and the §5 requirement that an unreachable service behaves like every other
+unreachable endpoint — retry, failover, alert, message preserved.
+
+**6 · Apply the answer.** Write the value in, reject the message, or route on it. The
+error policy decides what happens when a value cannot be resolved: fail, pass through
+unchanged, or substitute a default.
+*Satisfies:* the §4 story that a failed lookup must never destroy the value it was
+meant to improve. Whether an unresolved value is a data quality finding or a broken
+interface is a decision only the customer can make.
+
+**7 · Forward it.** A standard business operation. The receiving system gets an
+improved message through the channel it always used.
+*Satisfies:* the §6 anti-goal — this is not a transformation engine and not a new
+integration pattern. The interface still ends where it always did.
+
+**Steps 3 and 4 are optional.** Where the tool is known at build time, the flow is
+steps 1, 2, 5, 6, 7 — a single round trip, no catalogue fetch, no model, no cache.
+Discovery belongs to build time and the model is an escape hatch, so the default path
+stays deterministic.
+
+### 10.4 The transformation level
+
+The same seven steps collapse to one call made from inside a mapping. The open
+question §4 raises — where a transformation gets its address, TLS configuration and
+credential from, given that a transformation is not a host and has nowhere to hold
+settings — is answered by having the transformation *name* a configured component
+rather than carry its details. The named component need not be running; it can serve
+purely as a configuration record, and the same one serves the production level when
+both are in use.
+
+The trade-off is real and must be stated to the customer rather than hidden: this
+route inherits TLS and credentials but not OAuth 2, not proxy settings, and not the
+traced, retryable message. §4 asks for exactly that disclosure.
+
+Two candidate mechanisms were considered for open question 6. A pair of shipped
+functions callable from a mapping, which the prototype uses; and a custom
+transformation action, which would read more naturally in the visual editor but whose
+feasibility on the target platform is unestablished. A third — inheriting the
+functions so they resolve by bare name inside a mapping — was tried and abandoned:
+bare names do not resolve in a hand-authored transformation, and shipping something
+that only works in the visual editor would be a trap.
+
+### 10.5 What the prototype measured
+
+Evidence that the proposal is buildable, not a claim about the finished product.
+
+| | |
+|---|---|
+| Throughput | 50 messages producing 400 traced production messages in about 3 s, selections cached |
+| Language neutrality | 3.59 s versus 3.65 s over 50 messages, the two implementation languages run concurrently in separate namespaces — under 2% apart, and about 15 µs per message when isolated to the methods themselves |
+| Selection cost | 2 model calls served 50 messages |
+| Interoperability | Verified against live third-party services, including ones that reply over server-sent events rather than plain JSON |
+
+### 10.6 Where this proposal could be wrong
+
+- The two-level split assumes interface engineers want the choice. If they do not,
+  one level and clear guidance would be simpler.
+- Model-based selection may prove unnecessary in practice if tools are nearly always
+  known at build time. It is optional precisely because that is unresolved.
+- Caching a judgement assumes the right cache key is discoverable per interface. Where
+  it is not, the economics change.

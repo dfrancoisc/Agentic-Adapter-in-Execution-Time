@@ -494,7 +494,51 @@ hop is a round trip: a request goes out and an answer comes back.
 
 ### The story of one message
 
-Seven steps, taken from a real trace. Each one says what happens and what it buys you.
+Seven steps, taken from a real trace. Every request is drawn with the reply that comes
+back to it — the catalogue, the chosen tool, the result.
+
+```mermaid
+sequenceDiagram
+    participant SRC as Sending system<br/>outside
+    participant BS as Business service<br/>HL7FileIn
+    participant BP as Business process<br/>EnrichCodes
+    participant OP as Business operation<br/>+ MCP adapter<br/>SnomedMCP
+    participant SRV as MCP server<br/>outside
+    participant SEL as Business operation<br/>+ LLM adapter<br/>ToolSelector
+    participant LLM as Model provider<br/>outside
+    participant BO as Business operation<br/>HL7FileOut
+    participant DST as Receiving system<br/>outside
+
+    SRC->>BS: 1 · HL7 file arrives
+    BS->>BP: 2 · standard production message
+
+    BP->>OP: 3 · ToolRequest Action=list
+    OP->>SRV: initialize · tools/list over TLS
+    SRV-->>OP: catalogue + inputSchema
+    OP-->>BP: ToolResponse ResultJSON
+
+    BP->>SEL: 4 · SelectRequest goal + catalogue
+    SEL->>LLM: prompt over TLS — skipped on a cache hit
+    LLM-->>SEL: tool name + reason
+    SEL-->>BP: SelectResponse ToolName · Reason · FromCache
+
+    BP->>OP: 5 · ToolRequest Action=call
+    OP->>SRV: tools/call over TLS
+    SRV-->>OP: result — content · structuredContent
+    OP-->>BP: ToolResponse ResultJSON · DurationMs
+
+    Note over BP: 6 · write the value back into the message
+
+    BP->>BO: 7 · enriched message
+    BO->>DST: delivered
+```
+
+Solid arrows are requests, dashed arrows are the replies. Everything except the four
+participants marked `outside` is a business host you configured; each hop between two
+of them is a production message with its own body, timing and retry behaviour. Steps 3
+and 4 are optional — see the note after step 5.
+
+Each step, and what it buys you.
 
 **1 · The message arrives.** `Sending system → HL7FileIn`
 A standard business service — file, TCP with MLLP framing, FTP, REST. Nothing about
