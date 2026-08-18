@@ -132,11 +132,9 @@ it, which matters the first few times you run this.
 
 | Target | Setting | Value |
 |---|---|---|
-| Adapter | `HTTPServer` | `127.0.0.1` (the mock) or your terminology host |
-| Adapter | `HTTPPort` | `8765` or `443` |
-| Adapter | `URL` | `/` or `/mcp/terminology` |
+| Adapter | `ServerURL` | `http://127.0.0.1:8765/` (the mock) or your terminology endpoint |
 | Adapter | `ToolName` | `translate_code` |
-| Adapter | `AllowedTools` | `^translate_code$` |
+| Adapter | `AllowedTools` | leave blank |
 | Adapter | `OnErrorAction` | `fail` |
 
 For a real server add `SSLConfig`, `Credentials` and `AuthType`.

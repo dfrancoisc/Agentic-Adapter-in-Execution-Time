@@ -113,7 +113,7 @@ readable in the Visual Trace without a viewer.
 | Method | Returns | Notes |
 |---|---|---|
 | `CallTool(tool, argsJSON, path)` | Extracted result | Blank `tool` uses `ToolName`; blank `path` uses `ResultPath` |
-| `ListTools()` | JSON array | Paginated via `nextCursor`, filtered by `AllowedTools` |
+| `ListTools()` | JSON array | Paginated via `nextCursor`. Returns the FULL catalogue, each entry annotated `permitted` — filtering here would hide what you are missing |
 | `DescribeTool(tool)` | JSON | One tool's input schema |
 | `Handshake()` | JSON | `initialize` then `notifications/initialized` |
 | `TestConnection()` | `%Status` | Handshake only, for a health check |
@@ -134,9 +134,10 @@ not `self._rpc(...)`.
 `Credentials`, `ConnectTimeout`, `ResponseTimeout`, `RetriesToFailover`, the proxy
 settings, and the full OAuth 2 surface. Configured exactly as on any HTTP adapter.
 
-The endpoint deliberately reuses `HTTPServer` / `HTTPPort` / `URL` rather than
-introducing a single `ServerURL` setting, so there is one convention and one source
-of truth.
+`ServerURL` is the setting an interface engineer actually uses; it expands into
+`HTTPServer`, `HTTPPort` and `URL` at host start and selects the default TLS
+configuration for an `https` address. The three inherited fields remain available for
+cases needing finer control, and are left blank otherwise.
 
 ### Added
 
@@ -148,7 +149,7 @@ of truth.
 | `AuthType` | `none` | `none`, `basic`, `bearer`, `header`, `oauth2` |
 | `HeaderName` | `X-API-Key` | Header used when `AuthType` is `header` |
 | `ToolName` | | Default tool |
-| `AllowedTools` | | Regular-expression allow-list |
+| `AllowedTools` | | Blank allows every tool the server offers. Otherwise plain tool names, comma separated, `*` wildcard |
 | `ResultPath` | | Dotted path into the result |
 | `OnErrorAction` | `fail` | `fail`, `passthrough`, `default` |
 | `DefaultValue` | | Returned under `OnErrorAction = default` |
