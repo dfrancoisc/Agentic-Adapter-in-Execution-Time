@@ -700,6 +700,7 @@ more than one message type or destination is in play.
 
 - [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md) — portal walkthrough, both UIs, with a troubleshooting table
 - [docs/EXAMPLE_HL7_ENRICHMENT.md](docs/EXAMPLE_HL7_ENRICHMENT.md) — the worked example in detail
+- [docs/architecture.html](docs/architecture.html) — architecture diagrams: the five hosts, the message path, and the model boundary
 - [docs/WRITING_THE_PROCESS.md](docs/WRITING_THE_PROCESS.md) — the process class in full, in ObjectScript and in Python
 - [docs/EXAMPLE_REAL_TERMINOLOGY.md](docs/EXAMPLE_REAL_TERMINOLOGY.md) — validating codes against the live HL7 terminology server
 - [docs/BENCHMARK.md](docs/BENCHMARK.md) — 50-message benchmark and method

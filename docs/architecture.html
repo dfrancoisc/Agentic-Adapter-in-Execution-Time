@@ -1,0 +1,443 @@
+<title>MCP in the Message Path</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+  /* ---- tokens: light is the base set, both themes redefined below ---- */
+  :root {
+    --ground:      #FAF9F6;
+    --surface:     #F1EEE8;
+    --surface-2:   #E7E2D9;
+    --ink:         #16191B;
+    --muted:       #6C6862;
+    --line:        #D4CEC4;
+    --line-strong: #B6AEA1;
+    --accent:      #1D6F6A;
+    --accent-ink:  #12514D;
+    --accent-wash: #E2EEEC;
+    --warn:        #8A5A16;
+    --shadow:      0 1px 2px rgba(22,25,27,.05), 0 8px 24px -16px rgba(22,25,27,.25);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #111413;
+      --surface:     #191D1C;
+      --surface-2:   #232826;
+      --ink:         #ECE9E3;
+      --muted:       #9C978E;
+      --line:        #2E3331;
+      --line-strong: #454B48;
+      --accent:      #57BDB3;
+      --accent-ink:  #8AD6CE;
+      --accent-wash: #16302E;
+      --warn:        #D4A25C;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:      #111413;
+    --surface:     #191D1C;
+    --surface-2:   #232826;
+    --ink:         #ECE9E3;
+    --muted:       #9C978E;
+    --line:        #2E3331;
+    --line-strong: #454B48;
+    --accent:      #57BDB3;
+    --accent-ink:  #8AD6CE;
+    --accent-wash: #16302E;
+    --warn:        #D4A25C;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 56px 24px 96px; }
+  .prose { max-width: 68ch; }
+
+  code, .mono, figcaption .k {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  /* ---- masthead ---- */
+  header.masthead { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 4.4vw, 46px); line-height: 1.08; letter-spacing: -.022em;
+    font-weight: 640; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 18px; color: var(--muted); margin: 0; max-width: 62ch; }
+
+  h2 {
+    font-size: 23px; letter-spacing: -.012em; font-weight: 640;
+    margin: 64px 0 14px; text-wrap: balance;
+  }
+  h3 { font-size: 16.5px; font-weight: 640; margin: 34px 0 8px; letter-spacing: -.004em; }
+  p { margin: 0 0 16px; }
+  strong { font-weight: 620; }
+
+  /* ---- figures ---- */
+  figure { margin: 30px 0 8px; }
+  .canvas {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 26px 22px 20px;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  .canvas svg { display: block; width: 100%; min-width: 720px; height: auto; }
+  figcaption {
+    margin-top: 14px; font-size: 14px; color: var(--muted); max-width: 74ch;
+  }
+  figcaption .k { color: var(--ink); }
+
+  /* ---- sequence ---- */
+  ol.seq { list-style: none; counter-reset: s; margin: 22px 0 0; padding: 0; display: grid; gap: 2px; }
+  ol.seq li {
+    counter-increment: s;
+    display: grid; grid-template-columns: 30px 1fr; gap: 14px;
+    padding: 9px 12px; border-radius: 7px; align-items: baseline;
+  }
+  ol.seq li:nth-child(odd) { background: var(--surface); }
+  ol.seq li::before {
+    content: counter(s);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; color: var(--accent); font-weight: 600;
+    border: 1px solid var(--line-strong); border-radius: 5px;
+    text-align: center; padding: 1px 0; background: var(--ground);
+  }
+  ol.seq .hop {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; color: var(--ink);
+  }
+  ol.seq .what { color: var(--muted); font-size: 14.5px; }
+
+  /* ---- tables ---- */
+  .tablewrap { overflow-x: auto; margin: 22px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 560px; }
+  th, td { text-align: left; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; border-bottom-color: var(--line-strong);
+  }
+  td code { font-size: 13px; }
+  td .role { color: var(--muted); }
+
+  /* ---- callout ---- */
+  .note {
+    border-left: 2px solid var(--accent);
+    background: var(--accent-wash);
+    padding: 16px 18px; border-radius: 0 8px 8px 0;
+    margin: 24px 0; font-size: 15px; max-width: 70ch;
+  }
+  .note p:last-child { margin-bottom: 0; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 16px 0 0; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 22px; height: 0; border-top-width: 2px; display: inline-block; }
+
+  footer { margin-top: 72px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Agentic Adapter in Execution Time</p>
+    <h1>MCP in the message path</h1>
+    <p class="standfirst">
+      How an IRIS interoperability production calls an MCP server while a message is
+      in flight — which host does what, what crosses the production boundary, and
+      where a language model does and does not sit.
+    </p>
+  </header>
+
+  <div class="prose">
+    <p>
+      The unit of work is a production. Five hosts, two of which carry adapters that
+      reach outside. The example below enriches coded values in an HL7 message, but
+      nothing in the shipped module knows what HL7 is — the same topology serves any
+      message and any tool.
+    </p>
+  </div>
+
+  <figure>
+    <div class="canvas">
+      <svg viewBox="0 0 1040 540" role="img"
+           aria-label="An IRIS production containing five business hosts. A file service passes a message to a business process, which calls an MCP operation and a tool selector operation, then forwards the message to a file operation. The two operations carry adapters that cross the production boundary over HTTPS to an MCP server and a model provider.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+          <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- production boundary -->
+        <rect x="170" y="34" width="640" height="472" rx="12"
+              fill="none" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="7 5"/>
+        <text x="186" y="56" font-size="11.5" letter-spacing="1.6"
+              fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">IRIS PRODUCTION</text>
+
+        <!-- outside: source -->
+        <rect x="24" y="240" width="120" height="60" rx="8" fill="var(--surface-2)" stroke="var(--line-strong)"/>
+        <text x="84" y="266" text-anchor="middle" font-size="13" fill="var(--ink)">Sending</text>
+        <text x="84" y="284" text-anchor="middle" font-size="13" fill="var(--ink)">system</text>
+
+        <!-- outside: destination -->
+        <rect x="880" y="240" width="130" height="60" rx="8" fill="var(--surface-2)" stroke="var(--line-strong)"/>
+        <text x="945" y="266" text-anchor="middle" font-size="13" fill="var(--ink)">Receiving</text>
+        <text x="945" y="284" text-anchor="middle" font-size="13" fill="var(--ink)">system</text>
+
+        <!-- outside: MCP server -->
+        <rect x="880" y="72" width="130" height="66" rx="8" fill="var(--surface-2)" stroke="var(--line-strong)"/>
+        <text x="945" y="98" text-anchor="middle" font-size="13" fill="var(--ink)">MCP server</text>
+        <text x="945" y="117" text-anchor="middle" font-size="11.5" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">tools/list · call</text>
+
+        <!-- outside: model -->
+        <rect x="880" y="402" width="130" height="66" rx="8" fill="var(--surface-2)" stroke="var(--line-strong)"/>
+        <text x="945" y="428" text-anchor="middle" font-size="13" fill="var(--ink)">Model provider</text>
+        <text x="945" y="447" text-anchor="middle" font-size="11.5" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">Bedrock · Anthropic</text>
+
+        <!-- inbound host -->
+        <rect x="196" y="238" width="132" height="64" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="262" y="262" text-anchor="middle" font-size="13.5" fill="var(--ink)">Business</text>
+        <text x="262" y="279" text-anchor="middle" font-size="13.5" fill="var(--ink)">service</text>
+        <text x="262" y="320" text-anchor="middle" font-size="11" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">HL7FileIn</text>
+
+        <!-- business process -->
+        <rect x="382" y="230" width="164" height="80" rx="8"
+              fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="464" y="258" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">Business process</text>
+        <text x="464" y="277" text-anchor="middle" font-size="12" fill="var(--muted)">your logic</text>
+        <text x="464" y="328" text-anchor="middle" font-size="11" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">EnrichmentProcess</text>
+
+        <!-- MCP operation -->
+        <rect x="596" y="72" width="176" height="80" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="684" y="98" text-anchor="middle" font-size="13.5" fill="var(--ink)">Business operation</text>
+        <text x="684" y="117" text-anchor="middle" font-size="12" fill="var(--accent-ink)"
+              font-family="ui-monospace, Menlo, monospace">+ MCP adapter</text>
+        <text x="684" y="140" text-anchor="middle" font-size="11" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">SnomedMCP</text>
+
+        <!-- selector operation -->
+        <rect x="596" y="402" width="176" height="80" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="684" y="428" text-anchor="middle" font-size="13.5" fill="var(--ink)">Business operation</text>
+        <text x="684" y="447" text-anchor="middle" font-size="12" fill="var(--accent-ink)"
+              font-family="ui-monospace, Menlo, monospace">+ LLM adapter</text>
+        <text x="684" y="470" text-anchor="middle" font-size="11" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">ToolSelector</text>
+
+        <!-- outbound host -->
+        <rect x="640" y="238" width="132" height="64" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="706" y="262" text-anchor="middle" font-size="13.5" fill="var(--ink)">Business</text>
+        <text x="706" y="279" text-anchor="middle" font-size="13.5" fill="var(--ink)">operation</text>
+        <text x="706" y="320" text-anchor="middle" font-size="11" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">HL7FileOut</text>
+
+        <!-- flow: source -> service -->
+        <g stroke="var(--line-strong)" fill="none" stroke-width="1.6" color="var(--line-strong)">
+          <line x1="146" y1="270" x2="192" y2="270" marker-end="url(#ar)"/>
+          <line x1="774" y1="270" x2="876" y2="270" marker-end="url(#ar)"/>
+        </g>
+
+        <!-- in-production message path (accent) -->
+        <g stroke="var(--accent)" fill="none" stroke-width="2" color="var(--accent)">
+          <line x1="330" y1="270" x2="378" y2="270" marker-end="url(#ar-a)"/>
+          <line x1="548" y1="270" x2="636" y2="270" marker-end="url(#ar-a)"/>
+          <!-- process <-> MCP operation -->
+          <path d="M 500 228 L 500 130 L 592 130" marker-end="url(#ar-a)"/>
+          <path d="M 640 152 L 640 200 L 508 200 L 508 226" marker-end="url(#ar-a)"/>
+          <!-- process <-> selector -->
+          <path d="M 428 312 L 428 442 L 592 442" marker-end="url(#ar-a)"/>
+          <path d="M 640 402 L 640 356 L 436 356 L 436 314" marker-end="url(#ar-a)"/>
+        </g>
+
+        <!-- boundary crossings (dashed) -->
+        <g stroke="var(--muted)" fill="none" stroke-width="1.6" stroke-dasharray="5 4" color="var(--muted)">
+          <line x1="774" y1="105" x2="876" y2="105" marker-end="url(#ar)"/>
+          <line x1="774" y1="435" x2="876" y2="435" marker-end="url(#ar)"/>
+        </g>
+
+        <!-- labels -->
+        <g font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">
+          <text x="516" y="122">tools/list · tools/call</text>
+          <text x="516" y="192" text-anchor="start">catalog · result</text>
+          <text x="444" y="434">goal + catalog</text>
+          <text x="452" y="348">chosen tool</text>
+          <text x="825" y="98" text-anchor="middle">HTTPS</text>
+          <text x="825" y="428" text-anchor="middle">HTTPS</text>
+          <text x="352" y="262" text-anchor="middle">msg</text>
+          <text x="592" y="262" text-anchor="middle">msg</text>
+        </g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="border-top:2px solid var(--accent)"></i> production message — traced, retryable</span>
+      <span><i class="swatch" style="border-top:2px dashed var(--muted)"></i> leaves the production over TLS</span>
+    </div>
+    <figcaption>
+      Five hosts. Only the two operations reach outside, and each carries one adapter
+      for one external system. The business process is the only component that talks
+      to both — and the only one you write.
+    </figcaption>
+  </figure>
+
+  <h2>What actually happens to one message</h2>
+
+  <div class="prose">
+    <p>
+      Every hop below is a real production message, recorded in the Message Viewer
+      with its own timing, its own body and its own retry behaviour. This is a trace
+      taken from a running instance, not an illustration.
+    </p>
+  </div>
+
+  <ol class="seq">
+    <li><span class="hop">HL7FileIn → EnrichCodes</span><span class="what">the message arrives and is parsed</span></li>
+    <li><span class="hop">EnrichCodes → SnomedMCP</span><span class="what">what tools does this server offer?</span></li>
+    <li><span class="hop">SnomedMCP → EnrichCodes</span><span class="what">the catalog, with input schemas</span></li>
+    <li><span class="hop">EnrichCodes → ToolSelector</span><span class="what">the goal, the catalog, and the value in hand</span></li>
+    <li><span class="hop">ToolSelector → EnrichCodes</span><span class="what">the chosen tool, and why — usually from cache</span></li>
+    <li><span class="hop">EnrichCodes → SnomedMCP</span><span class="what">call that tool with these arguments</span></li>
+    <li><span class="hop">SnomedMCP → EnrichCodes</span><span class="what">the result</span></li>
+    <li><span class="hop">EnrichCodes → HL7FileOut</span><span class="what">the improved message, forwarded</span></li>
+  </ol>
+
+  <div class="note">
+    <p>
+      Steps 2 to 5 disappear when the tool is known in advance. Configure a tool name,
+      or map a field in the message to one, and a message costs a single call — no
+      catalog fetch, no model, no cache. The model is an escape hatch for when the
+      right tool genuinely cannot be known until the message arrives.
+    </p>
+  </div>
+
+  <h2>The model never touches the tool server</h2>
+
+  <div class="prose">
+    <p>
+      The two adapters have no connection to each other. Everything the model learns
+      about the tool server arrives as text in a prompt, and everything it decides
+      comes back as text. It holds no credentials for the server, has no network path
+      to it, and cannot invoke anything.
+    </p>
+  </div>
+
+  <figure>
+    <div class="canvas">
+      <svg viewBox="0 0 1000 300" role="img"
+           aria-label="The business process fetches a tool catalog from the MCP adapter, passes it as text to the LLM adapter, receives a tool name back as text, and then asks the MCP adapter to call that tool. The allow-list sits between the returned name and the call.">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <rect x="40" y="106" width="180" height="88" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="130" y="142" text-anchor="middle" font-size="13.5" fill="var(--ink)">MCP adapter</text>
+        <text x="130" y="163" text-anchor="middle" font-size="11.5" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">holds the credential</text>
+
+        <rect x="400" y="98" width="200" height="104" rx="8"
+              fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="500" y="140" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">Business process</text>
+        <text x="500" y="162" text-anchor="middle" font-size="11.5" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">the only party in both</text>
+
+        <rect x="780" y="106" width="180" height="88" rx="8" fill="var(--ground)" stroke="var(--line-strong)"/>
+        <text x="870" y="142" text-anchor="middle" font-size="13.5" fill="var(--ink)">LLM adapter</text>
+        <text x="870" y="163" text-anchor="middle" font-size="11.5" fill="var(--muted)"
+              font-family="ui-monospace, Menlo, monospace">sees text only</text>
+
+        <g stroke="var(--accent)" fill="none" stroke-width="2" color="var(--accent)">
+          <path d="M 224 132 L 396 118" marker-end="url(#ar2)"/>
+          <path d="M 604 122 L 776 132" marker-end="url(#ar2)"/>
+          <path d="M 776 172 L 604 180" marker-end="url(#ar2)"/>
+          <path d="M 396 186 L 224 174" marker-end="url(#ar2)"/>
+        </g>
+
+        <g font-size="11.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">
+          <text x="310" y="110" text-anchor="middle">catalog</text>
+          <text x="690" y="106" text-anchor="middle">catalog as prompt text</text>
+          <text x="690" y="196" text-anchor="middle">a tool name, as text</text>
+          <text x="310" y="204" text-anchor="middle">call this tool</text>
+        </g>
+
+        <!-- the gate -->
+        <rect x="252" y="228" width="200" height="40" rx="6"
+              fill="var(--ground)" stroke="var(--warn)" stroke-dasharray="4 3"/>
+        <text x="352" y="253" text-anchor="middle" font-size="12" fill="var(--warn)"
+              font-family="ui-monospace, Menlo, monospace">AllowedTools checked here</text>
+        <path d="M 310 228 L 310 190" stroke="var(--warn)" stroke-width="1.4" stroke-dasharray="4 3" fill="none"/>
+      </svg>
+    </div>
+    <figcaption>
+      A model that hallucinates a tool name, or is argued into naming a destructive
+      one, is refused by configuration it can neither see nor influence. The gate sits
+      between the answer and the call, not inside the model.
+    </figcaption>
+  </figure>
+
+  <h2>What ships, and what you write</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Component</th><th>Kind</th><th>Who writes it</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Agentic.Adapter.MCP</code></td><td class="role">Outbound adapter</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.LLM</code></td><td class="role">Outbound adapter</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.Operation</code></td><td class="role">Business operation</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.SelectorOperation</code></td><td class="role">Business operation</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.EnrichmentProcess</code></td><td class="role">Business process, abstract</td><td class="role">Shipped</td></tr>
+        <tr><td><strong>Your process</strong></td><td class="role">Subclass of the above</td><td><strong>You — two methods</strong></td></tr>
+        <tr><td>Inbound and outbound hosts</td><td class="role">Standard IRIS</td><td class="role">Configured, not written</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="prose">
+    <p>
+      The two methods are <code>where the values live in my message</code> and
+      <code>what to do with the answer</code>. Everything else — the protocol, the
+      catalog, tool selection, caching, error policy, the connections drawn above — is
+      inherited. In the worked example that is 78 lines, and every line is about HL7.
+    </p>
+
+    <h3>If the shape does not fit</h3>
+    <p>
+      The base process assumes one common pattern: find several values, decide a tool
+      for each, write the answers back. When your interface does something else — one
+      call per message, routing on the answer, forwarding nothing — skip it. Any
+      process, BPL or operation can send a tool request directly to the MCP item, and
+      the adapter neither knows nor cares who called.
+    </p>
+  </div>
+
+  <footer>
+    Agentic Adapter in Execution Time · requires IRIS, IRIS for Health or Health
+    Connect 2026.2 or later · diagrams reflect a production verified end to end
+    against a live MCP server and Amazon Bedrock.
+  </footer>
+
+</div>
