@@ -263,15 +263,17 @@ as a plain URL:
 
 #### Choosing between them
 
-| | DTL inline | Business process |
+| | `MCPLookup` (DTL, rules) | MCP operation (productions) |
 |---|---|---|
 | Moving parts | One function | A process plus an operation |
+| TLS | Yes, from the named item | Yes |
+| Credentials | Yes — bearer, basic | Yes |
+| OAuth 2 | No | Yes |
+| Proxy settings | No | Yes |
 | In the Visual Trace | Nothing | Its own message, with timing and body |
-| TLS | Yours to arrange | Inherited |
-| Credentials, OAuth 2 | Bearer at best | Inherited |
 | Retry, failover, alerting | None | The production's |
 | A slow server | Blocks the transformation | Times out and retries per configuration |
-| Model-chosen tools | Not available | Available |
+| Model-chosen tools | No | Yes |
 
 Both are first-class; they answer different questions. `MCPLookup` is the right
 answer when the call belongs in the transformation — a lookup, a normalisation, a

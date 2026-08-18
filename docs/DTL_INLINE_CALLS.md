@@ -77,11 +77,15 @@ So: if you are writing a DTL at all, you already have the interoperability layer
 What this shows is that the *call* needs nothing beyond that — not the adapter, not
 an operation, not a running production.
 
-### Which is exactly the problem
+### What that costs, and what it does not
 
-Needing none of that is the same sentence as getting none of it. No adapter means no
-inherited TLS, credentials or OAuth 2. No operation means no traced message. No
-production involvement means no retry, no failover, no alerting.
+Needing none of that is mostly the same sentence as getting none of it — but not
+entirely, and the distinction matters when choosing.
+
+`MCPLookup` reads the named item's `SSLConfig` and `Credentials` and applies them, so
+**TLS and bearer or basic authentication do carry over**. What genuinely does not:
+OAuth 2, whose token acquisition and refresh live in the adapter; the proxy settings;
+the traced production message; and retry, failover and alerting.
 
 ## What it gives up
 
@@ -119,19 +123,22 @@ So the configuration can be borrowed. The adapter cannot.
 
 ## Which to use
 
-| | DTL inline | Business process |
+| | `MCPLookup` (DTL, rules) | MCP operation (productions) |
 |---|---|---|
 | Moving parts | One function | A process plus an operation |
-| Where the call appears in the trace | Nowhere | Its own message, with timing and body |
-| TLS | Your responsibility | Inherited |
-| Credentials, OAuth 2 | Bearer at best | Inherited |
+| TLS | Yes, from the named item | Yes |
+| Credentials | Yes — bearer, basic | Yes |
+| OAuth 2 | No | Yes |
+| Proxy settings | No | Yes |
+| In the Visual Trace | Nothing | Its own message, with timing and body |
 | Retry, failover, alerting | None | The production's |
-| Slow server | Blocks the transformation | Times out and retries per configuration |
-| Tool selection by a model | Not available | Available |
+| A slow server | Blocks the transformation | Times out and retries per configuration |
+| Model-chosen tools | No | Yes |
 
-Use the DTL form when the call is simple, fast, unauthenticated or bearer
-authenticated, and nobody will need to audit it. Use a business process when any of
-those is untrue — which, in a clinical interface, is most of the time.
+Both authenticate. The real question is whether the call needs to be an auditable,
+retryable event in its own right, or needs OAuth 2. Use `MCPLookup` when the call
+belongs in the transformation and nobody will need to audit it on its own. Use a
+business process when it does — which, in a clinical interface, is most of the time.
 
 ## A third option, if the DTL ergonomics are what you want
 
