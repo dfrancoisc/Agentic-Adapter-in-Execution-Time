@@ -399,19 +399,32 @@
 
   <h2>What ships, and what you write</h2>
 
+  <div class="prose">
+    <p>
+      Two levels, because an interface can reach out at two moments.
+      <strong>Production level</strong> — invoke agents or MCP servers while
+      exchanging data, on interface execution time. <strong>Transformation
+      level</strong> — invoke them while transforming data or applying rules, on data
+      execution time. An adapter has to hang off a business host, and a transformation
+      is not one, which is why the second level is a function rather than an adapter.
+    </p>
+  </div>
+
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th>Component</th><th>Kind</th><th>Who writes it</th></tr>
+        <tr><th>Component</th><th>Kind</th><th>Level</th><th>Who writes it</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>Agentic.Adapter.MCP</code></td><td class="role">Outbound adapter</td><td class="role">Shipped</td></tr>
-        <tr><td><code>Agentic.Adapter.LLM</code></td><td class="role">Outbound adapter</td><td class="role">Shipped</td></tr>
-        <tr><td><code>Agentic.Adapter.Operation</code></td><td class="role">Business operation</td><td class="role">Shipped</td></tr>
-        <tr><td><code>Agentic.Adapter.SelectorOperation</code></td><td class="role">Business operation</td><td class="role">Shipped</td></tr>
-        <tr><td><code>Agentic.Adapter.EnrichmentProcess</code></td><td class="role">Business process, abstract</td><td class="role">Shipped</td></tr>
-        <tr><td><strong>Your process</strong></td><td class="role">Subclass of the above</td><td><strong>You — two methods</strong></td></tr>
-        <tr><td>Inbound and outbound hosts</td><td class="role">Standard IRIS</td><td class="role">Configured, not written</td></tr>
+        <tr><td><code>Agentic.Adapter.MCP</code></td><td class="role">Outbound adapter</td><td class="role">Production</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.LLM</code></td><td class="role">Outbound adapter</td><td class="role">Production</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.Operation</code></td><td class="role">Business operation</td><td class="role">Production</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.SelectorOperation</code></td><td class="role">Business operation</td><td class="role">Production</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.EnrichmentProcess</code></td><td class="role">Business process, abstract</td><td class="role">Production</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.Functions</code></td><td class="role">Rule function set</td><td class="role">Transformation</td><td class="role">Shipped</td></tr>
+        <tr><td><code>Agentic.Adapter.Protocol</code></td><td class="role">MCP wire protocol</td><td class="role">Both</td><td class="role">Shipped</td></tr>
+        <tr><td><strong>Your process</strong></td><td class="role">Subclass of the above</td><td class="role">Production</td><td><strong>You — two methods</strong></td></tr>
+        <tr><td>Inbound and outbound hosts</td><td class="role">Standard IRIS</td><td class="role">Production</td><td class="role">Configured, not written</td></tr>
       </tbody>
     </table>
   </div>

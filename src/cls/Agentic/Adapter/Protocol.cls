@@ -10,6 +10,8 @@
 /// Everything above the socket — envelope construction, SSE unwrapping, JSON-RPC
 /// error handling, result-path extraction — lives here and is used by both. Without
 /// this, the two drift, and the first divergence is always the one nobody notices.
+///
+/// Part of: Shared by both levels. See README.
 Class Agentic.Adapter.Protocol [ Abstract ]
 {
 

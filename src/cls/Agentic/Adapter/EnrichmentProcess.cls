@@ -18,6 +18,8 @@
 /// Message-format agnostic: HL7, FHIR, X12 or a custom class all work, because the
 /// base class never touches the message. It only ever holds candidates, which are
 /// plain JSON objects the subclass produced.
+///
+/// Part of: Production level feature — the enrichment process you extend. See README.
 Class Agentic.Adapter.EnrichmentProcess Extends Ens.BusinessProcess [ Abstract ]
 {
 

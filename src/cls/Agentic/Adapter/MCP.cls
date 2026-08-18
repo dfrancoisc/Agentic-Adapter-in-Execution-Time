@@ -11,6 +11,8 @@
 ///
 /// The MCP protocol work is Embedded Python. The only ObjectScript logic is Send(),
 /// which must be ObjectScript because SendFormDataArray() uses Output parameters.
+///
+/// Part of: Production level feature — MCP connectivity. See README.
 Class Agentic.Adapter.MCP Extends EnsLib.HTTP.OutboundAdapter
 {
 

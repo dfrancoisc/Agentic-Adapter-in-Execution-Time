@@ -3,6 +3,8 @@
 /// Add it to any production, point its adapter at an MCP server, and send it a
 /// ToolRequest. It carries no domain logic — deciding which tool to call and what
 /// to do with the answer belongs to the interface, not here.
+///
+/// Part of: Production level feature — MCP connectivity. See README.
 Class Agentic.Adapter.Operation Extends Ens.BusinessOperation
 {
 

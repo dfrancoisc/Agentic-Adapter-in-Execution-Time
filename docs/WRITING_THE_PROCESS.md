@@ -1,5 +1,7 @@
 # Writing the enrichment process
 
+*Production level feature — the extendable enrichment process.*
+
 The adapter handles MCP. The base class handles orchestration. What is left for you
 is the only part nobody else can write: where the values are in *your* message, and
 what to do with the answer.

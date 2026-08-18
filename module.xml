@@ -15,8 +15,10 @@
   <Resource Name="Agentic.PKG"/>
 
   <!-- Refuse to install on a version without the OAuth 2 adapter settings and
-       Embedded Python support this depends on. -->
-  <Invoke Class="Agentic.Install" Method="CheckVersion" CheckStatus="true" Phase="Verify"/>
+       Embedded Python support this depends on. Validate, not Verify: Verify is an
+       opt-in phase that a plain "zpm load" never runs, so a gate declared there
+       never fires. Validate runs on every install, before anything is compiled. -->
+  <Invoke Class="Agentic.Install" Method="CheckVersion" CheckStatus="true" Phase="Validate"/>
 </Module>
 </Document>
 </Export>

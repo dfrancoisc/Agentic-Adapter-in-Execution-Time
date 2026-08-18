@@ -1,5 +1,8 @@
 # Walkthrough — configuring a production that uses the MCP adapter
 
+*Production level features — invoke agents or MCP servers while exchanging data, on
+interface execution time.*
+
 From an empty namespace to a working, traced MCP tool call.
 
 Assumes the adapter is already installed on the instance — see the Install section

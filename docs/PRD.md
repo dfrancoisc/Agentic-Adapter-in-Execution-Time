@@ -120,14 +120,21 @@ Stated because it has been a recurring source of confusion in review.
 
 | | |
 |---|---|
-| **Features** | Four. In the production lane: MCP connectivity (an outbound adapter and its operation), model-chosen tools (an LLM adapter and a selector operation), and an extendable enrichment process. In the transformation lane: a pair of functions. Shipped, generic, installed by IPM |
+| **Features** | Four. In the production level: MCP connectivity (an outbound adapter and its operation), model-chosen tools (an LLM adapter and a selector operation), and an extendable enrichment process. In the transformation level: a pair of functions. Shipped, generic, installed by IPM |
 | **Customer configuration** | Which server, which tool, which credential, which field. Set in the Management Portal |
 | **Customer code** | Where the values live in their message and what to do with the answer |
 | **Examples** | Everything shipped under `Demo.*`. Not installed, not supported |
 
-The two features exist because IRIS offers two places to call from, and an adapter
-cannot exist in the second: an adapter hangs off a business host, and a
-transformation is not one. Terminology is used throughout the examples because it is
+The features are grouped by the two levels at which an interface can reach out.
+
+*Production level features* — invoke agents or MCP servers while exchanging data, on
+interface execution time. These are the three that hang off a business host: MCP
+connectivity, model-chosen tools, and the enrichment process.
+
+*Transformation level features* — invoke agents or MCP servers while transforming
+data or applying rules, on data execution time. This is the function pair, and it
+exists as functions rather than as an adapter because an adapter has to hang off a
+business host and a transformation is not one. Terminology is used throughout the examples because it is
 concrete and verifiable, not because the product is about terminology.
 
 ---
@@ -219,7 +226,7 @@ configuration and the credential from".
 
 The resolution: the settings live on an ordinary production item, and the
 transformation names it. The item may be disabled — it then acts purely as a
-configuration record — and the same item serves the business process lane when one
+configuration record — and the same item serves the business process level when one
 is present. A transformation therefore carries no endpoint, no certificate reference
 and no secret; it carries a name.
 

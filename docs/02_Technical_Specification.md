@@ -91,21 +91,39 @@ parameters.
 
 ## 4. Classes
 
-Grouped by feature: MCP connectivity, model-chosen tools, the enrichment process,
-the transformation functions, and shared plumbing.
+Grouped by the level at which the call is made.
+
+### Production level features
+
+Invoke agents or MCP servers while exchanging data — on interface execution time.
+
+| Class | Type | Feature | Purpose |
+|---|---|---|---|
+| `Agentic.Adapter.MCP` | Outbound adapter | MCP connectivity | Connection, security, protocol, filtering, extraction |
+| `Agentic.Adapter.Operation` | Business operation | MCP connectivity | Optional ready-made host. Any operation may use the adapter instead |
+| `Agentic.Adapter.Msg.ToolRequest` | `Ens.Request` | MCP connectivity | `Action`, `ToolName`, `ArgumentsJSON`, `ResultPath` |
+| `Agentic.Adapter.Msg.ToolResponse` | `Ens.Response` | MCP connectivity | `ResultJSON`, `IsError`, `ErrorText`, `DurationMs`, `ToolName` |
+| `Agentic.Adapter.LLM` | Outbound adapter | Model-chosen tools | Model provider: bedrock, anthropic, openai, custom |
+| `Agentic.Adapter.SelectorOperation` | Business operation | Model-chosen tools | Model-based tool selection, with caching |
+| `Agentic.Adapter.Msg.SelectRequest` | `Ens.Request` | Model-chosen tools | `Goal`, `CatalogJSON`, `ContextJSON`, `CacheKey` |
+| `Agentic.Adapter.Msg.SelectResponse` | `Ens.Response` | Model-chosen tools | `ToolName`, `ArgumentsJSON`, `Reason`, `FromCache`, token counts |
+| `Agentic.Adapter.EnrichmentProcess` | Business process, abstract | Enrichment process | Orchestration: catalog, selection, invocation, error policy |
+
+### Transformation level features
+
+Invoke agents or MCP servers while transforming data or applying rules — on data
+execution time.
 
 | Class | Type | Purpose |
 |---|---|---|
-| `Agentic.Adapter.MCP` | Outbound adapter | Connection, security, protocol, filtering, extraction |
-| `Agentic.Adapter.Operation` | Business operation | Optional ready-made host. Any operation may use the adapter instead |
-| `Agentic.Adapter.LLM` | Outbound adapter | Model provider: bedrock, anthropic, openai, custom |
-| `Agentic.Adapter.SelectorOperation` | Business operation | Model-based tool selection, with caching |
-| `Agentic.Adapter.EnrichmentProcess` | Business process, abstract | Orchestration: catalog, selection, invocation, error policy |
+| `Agentic.Adapter.Functions` | `Ens.Rule.FunctionSet` | `MCPCall` and `MCPLookup`, callable from a DTL or a rule condition. Resolves endpoint, TLS configuration and credential from a named production item |
+
+### Shared
+
+| Class | Type | Purpose |
+|---|---|---|
+| `Agentic.Adapter.Protocol` | Registered object | The MCP wire protocol with no transport: envelope, SSE unwrapping, JSON-RPC decoding, result-path extraction. Used by both levels so they cannot drift |
 | `Agentic.Adapter.ContextSearch` | Registered object | Dropdown providers for settings |
-| `Agentic.Adapter.Msg.ToolRequest` | `Ens.Request` | `Action`, `ToolName`, `ArgumentsJSON`, `ResultPath` |
-| `Agentic.Adapter.Msg.ToolResponse` | `Ens.Response` | `ResultJSON`, `IsError`, `ErrorText`, `DurationMs`, `ToolName` |
-| `Agentic.Adapter.Msg.SelectRequest` | `Ens.Request` | `Goal`, `CatalogJSON`, `ContextJSON`, `CacheKey` |
-| `Agentic.Adapter.Msg.SelectResponse` | `Ens.Response` | `ToolName`, `ArgumentsJSON`, `Reason`, `FromCache`, token counts |
 | `Agentic.Install` | Registered object | Shared-database installer. Not mapped |
 
 Message classes are deliberately flat scalars: format-agnostic, cheap to persist, and
@@ -126,6 +144,36 @@ Private: `rpc()`, `permitted()`, `extract()`, `onError()`, `secret()`, `Send()`.
 Note on cross-language calls: Embedded Python maps a leading `_` to `%`, so a
 private ObjectScript method named `rpc` is called from Python as `self.rpc(...)`,
 not `self._rpc(...)`.
+
+### Functions API
+
+The transformation level surface, in `Agentic.Adapter.Functions`.
+
+| Method | Returns | Notes |
+|---|---|---|
+| `MCPCall(item, tool, argumentsJSON, resultPath, default)` | Extracted result, or `default` | Arbitrary arguments, supplied as a JSON object |
+| `MCPLookup(item, tool, argument, value, resultPath, default)` | Extracted result, or `default` | Shorthand for a single named argument. `argument` is the argument's NAME, from the tool's `inputSchema` |
+
+`item` is the name of a production item configured with `Agentic.Adapter.MCP`, or a
+literal `http`/`https` URL. From the item it reads `ServerURL` (falling back to
+`HTTPServer`/`HTTPPort`/`URL`), `SSLConfig`, `Credentials` and `AuthType` via
+`Ens.Director.GetAdapterSettingValue()`, so a transformation names a server and never
+carries an address, a certificate reference or a secret. The item does not have to be
+enabled.
+
+`resultPath` defaults to `content.0.text`, where MCP puts a plain text answer.
+
+Neither raises. An exception escaping a DTL fails the whole transformation, and a
+value a server cannot resolve is a data quality finding rather than a broken
+interface — so failures go to the Event Log and `default` is returned. When assigning
+back over a field, pass the field's existing value as `default`; without it a failed
+lookup blanks what was already there.
+
+Transport is `%Net.HttpRequest` rather than the adapter, because an
+`EnsLib.HTTP.OutboundAdapter` subclass cannot be instantiated outside a running
+business host. Everything above the socket comes from `Agentic.Adapter.Protocol`, so
+the two levels cannot diverge. What this does *not* inherit: OAuth 2, proxy settings,
+a traced message, retry and failover.
 
 ---
 
@@ -165,6 +213,10 @@ through `Ens.Config.Credentials.GetCredentialsObj()` — never from a setting va
 which is correct because a catalogue is not known before it is fetched. When set, it
 is a comma separated list of plain tool names with `*` as a wildcard — not a regular
 expression, because the person configuring a production should not have to write one.
+
+Settings for `Agentic.Adapter.LLM`, `Agentic.Adapter.SelectorOperation` and
+`Agentic.Adapter.EnrichmentProcess` are listed in the README's settings reference and
+are not repeated here.
 
 ---
 
@@ -254,8 +306,15 @@ recommended for per-message field-level enrichment at HL7 volumes.
 Standalone IPM module, version 1.0.0, no dependencies.
 
 Requires IRIS, IRIS for Health or Health Connect **2026.2 or later**. The module
-enforces this during the IPM Verify phase via `Agentic.Install.CheckVersion()` and
-refuses to install on anything earlier.
+enforces this during the IPM **Validate** phase via `Agentic.Install.CheckVersion()`
+and refuses to install on anything earlier — the load aborts before a single class
+is compiled.
+
+Validate rather than Verify: `Verify` is an opt-in phase that a plain `zpm "load"`
+never runs, so a gate declared there never fires. Confirmed by pointing the same
+`<Invoke>` at a method that does not exist — under `Verify` the install succeeded
+anyway; under `Validate` it fails at `Validate START` with
+`<METHOD DOES NOT EXIST>`.
 
 Install once per instance:
 

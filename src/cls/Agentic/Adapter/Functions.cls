@@ -14,13 +14,13 @@
 /// Its endpoint, TLS configuration and credential are read from that item, so the
 /// server is configured in one place and the transformation just names it.
 ///
-/// THIS IS THE FEATURE FOR THIS LANE
+/// THIS IS THE FEATURE AT THE TRANSFORMATION LEVEL
 ///
 /// An adapter has to hang off a business host, and a transformation is not one, so
 /// there is no adapter shape available here. In a production the feature is
 /// Agentic.Adapter.MCP configured on an operation; in a DTL or a rule the feature is
 /// this function. Same protocol underneath - Agentic.Adapter.Protocol is shared by
-/// both - and two surfaces, because the two lanes have different vocabularies.
+/// both - and two surfaces, because the two levels have different vocabularies.
 ///
 /// WHAT IT IS NOT
 ///
@@ -46,6 +46,8 @@
 /// So the choice is not "secure versus insecure". It is whether the call needs to be
 /// an auditable, retryable event in its own right, or needs OAuth 2. When it does,
 /// route it through a business process and Agentic.Adapter.Operation.
+///
+/// Part of: Transformation level feature — MCPCall and MCPLookup. See README.
 Class Agentic.Adapter.Functions Extends Ens.Rule.FunctionSet
 {
 

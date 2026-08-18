@@ -1,4 +1,6 @@
 /// A model's answer about which MCP tool to call.
+///
+/// Part of: Production level feature — model-chosen tools. See README.
 Class Agentic.Adapter.Msg.SelectResponse Extends Ens.Response
 {
 

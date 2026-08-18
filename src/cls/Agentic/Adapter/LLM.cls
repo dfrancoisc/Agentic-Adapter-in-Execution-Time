@@ -11,6 +11,8 @@
 /// This adapter exists for ONE job: asking a model which tool to call. It is not a
 /// general chat client and deliberately has no streaming, no conversation history and
 /// no tool-calling of its own.
+///
+/// Part of: Production level feature — model-chosen tools. See README.
 Class Agentic.Adapter.LLM Extends EnsLib.HTTP.OutboundAdapter
 {
 

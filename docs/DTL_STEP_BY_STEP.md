@@ -1,5 +1,8 @@
 # Calling an MCP server from a DTL — step by step
 
+*Transformation level feature — invoke agents or MCP servers while transforming data
+or applying rules, on data execution time.*
+
 One page, current, verified end to end in one sitting. Every output below is real.
 
 If you want the reasoning behind the design, or the things I got wrong on the way

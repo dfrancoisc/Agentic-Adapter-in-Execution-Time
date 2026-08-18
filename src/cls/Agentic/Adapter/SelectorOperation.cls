@@ -8,6 +8,8 @@
 ///
 /// It selects a tool. It does not call one, and it never sees a whole message —
 /// only the goal, the tool catalog, and whichever fields the caller chooses to send.
+///
+/// Part of: Production level feature — model-chosen tools. See README.
 Class Agentic.Adapter.SelectorOperation Extends Ens.BusinessOperation
 {
 

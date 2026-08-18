@@ -13,6 +13,8 @@
 ///     zpm "load /path/to/Agentic-Adapter-in-Execution-Time"
 ///
 /// This class is not part of the shared package and does not need to be mapped.
+///
+/// Part of: Shared by both levels. See README.
 Class Agentic.Install
 {
 

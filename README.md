@@ -48,11 +48,13 @@ Nothing in `Agentic.*` mentions HL7, SNOMED, ICD or FHIR outside of a comment.
 
 ## The features
 
-Four features across two lanes, plus shared plumbing. The lanes exist because IRIS
+Four features across two levels, plus shared plumbing. The levels exist because IRIS
 offers two places to call from and they have different vocabularies: an adapter has
 to hang off a business host, and a transformation is not one.
 
-### Production lane
+### Production level features
+
+Invoke agents or MCP servers while exchanging data — on interface execution time.
 
 #### Feature 1 — MCP connectivity
 
@@ -131,7 +133,10 @@ a class of your own.
 the message. When your interface does something else, skip it: any process, BPL or
 operation can send a `ToolRequest` directly.
 
-### Transformation and rule lane
+### Transformation level features
+
+Invoke agents or MCP servers while transforming data or applying rules — on data
+execution time.
 
 #### Feature 4 — the functions
 
@@ -144,26 +149,26 @@ Shipped in `Agentic.Adapter.Functions`. A one-line call from inside a DTL or a
 routing rule condition, naming a production item so TLS and credentials come from
 configuration rather than from the transformation.
 
-No traced message, no retry, no OAuth 2. See [Choosing a lane](#choosing-a-lane).
+No traced message, no retry, no OAuth 2. See [Choosing a level](#choosing-a-level).
 
 ### Shared
 
 | Class | What it is |
 |---|---|
-| `Agentic.Adapter.Protocol` | The MCP wire protocol with no transport. Both lanes use it, so they cannot drift |
+| `Agentic.Adapter.Protocol` | The MCP wire protocol with no transport. Both levels use it, so they cannot drift |
 | `Agentic.Adapter.ContextSearch` | Populates the connection dropdown in settings from AI Settings |
 | `Agentic.Install` | Creates the shared database and maps it into every namespace. Run once |
 
 ### At a glance
 
-| Feature | Lane | Required? | You get |
+| Feature | Level | Required? | You get |
 |---|---|---|---|
 | MCP adapter + operation | Production | Yes | Traced calls, retry, failover, OAuth 2, discovery |
 | LLM adapter + selector | Production | No | A model picks the tool, cached and traced |
 | `EnrichmentProcess` | Production | No | Orchestration; you write two methods |
-| `MCPCall` / `MCPLookup` | DTL, rules | No | One-line call inside a transformation |
+| `MCPCall` / `MCPLookup` | Transformation | No | One-line call inside a transformation or a rule |
 
-## Choosing a lane
+## Choosing a level
 
 | | Adapter (productions) | Functions (DTL, rules) |
 |---|---|---|
@@ -227,9 +232,9 @@ do ##class(Agentic.Install).Verify()
 
 Only code is shared. Message data stays per-namespace. `Unmap()` reverses it.
 
-### Common to both lanes — the server, once
+### Common to both levels — the server, once
 
-Whichever lane you use, the server is configured in one place: a production item.
+Whichever level you use, the server is configured in one place: a production item.
 
 **1. TLS**, if the endpoint is `https`. System Administration → Security →
 **SSL/TLS Configurations** → Create. Note the name.
@@ -239,7 +244,7 @@ Whichever lane you use, the server is configured in one place: a production item
 never typed into a setting or written to a production definition.
 
 **3. OAuth 2**, if the server uses it. System Administration → Security →
-**OAuth 2.0** → Client. Note the application name. *Adapter lane only.*
+**OAuth 2.0** → Client. Note the application name. *Production level only.*
 
 **4. The item.** Interoperability → Configure → Production → **+** on Outbound
 Hosts:
@@ -259,7 +264,7 @@ Settings:
 | `AuthType` | `bearer`, `basic`, or `oauth2` |
 | `AllowedTools` | leave blank — you do not know a server's tools before you ask it |
 
-That item is now the single place the server is configured. Both lanes name it.
+That item is now the single place the server is configured. Both levels name it.
 
 ### Finding out what a server offers
 
@@ -286,7 +291,7 @@ and where the answer sits in the result.
 
 ---
 
-## Lane 1 — using the adapter in a production
+## Production level — using the adapter in a production
 
 ### Step by step
 
@@ -343,12 +348,12 @@ Every call is there with its request and response bodies.
 Full walkthrough with screenshots' worth of detail:
 [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md).
 
-### Use cases that fit this lane
+### Use cases that fit this level
 
 Anything where the call is a step in the flow, not a detail of a mapping — and
 anything an auditor might ask about later.
 
-| Use case | Tool the server exposes | Why this lane |
+| Use case | Tool the server exposes | Why this level |
 |---|---|---|
 | **Terminology translation** — local codes to SNOMED before an analytics feed | `translate_icd`, `translate_loinc` | Clinical data changed in flight; you will be asked why |
 | **Identity resolution** — resolve a patient or provider against a master index | `match_patient`, `resolve_npi` | Slow, fallible, and the match decision needs a record |
@@ -363,7 +368,7 @@ or something you will need to justify.
 
 ---
 
-## Lane 2 — using the functions in a DTL or rule
+## Transformation level — using the functions in a DTL or rule
 
 ### Where the configuration lives
 
@@ -419,12 +424,12 @@ full group path, always pass the last argument as the default, and call the func
 qualified with `##class(...)` — bare function names do not resolve in a
 hand-authored DTL.
 
-### Use cases that fit this lane
+### Use cases that fit this level
 
 Anything where the answer is a detail of the mapping, is fast, and nobody will audit
 the call on its own.
 
-| Use case | Call | Why this lane |
+| Use case | Call | Why this level |
 |---|---|---|
 | **Code description normalisation** — replace a sloppy description with the official one | `MCPLookup(item,"lookup_icd10","code",{OBX:5.1},…)` | Cosmetic correction; the code itself is unchanged |
 | **Reference data lookup** — facility code to facility name | `MCPLookup(item,"lookup_facility","id",{PV1:3.4},…)` | Static data, fast, uninteresting to an auditor |
@@ -437,11 +442,11 @@ the call on its own.
 The common thread: fast, deterministic enough, and the value is the point rather
 than the call.
 
-### The same question, both lanes
+### The same question, both levels
 
 Terminology appears in both lists deliberately — *translation* belongs in the
-production lane because it changes clinical meaning and will be questioned, while
-*description normalisation* belongs in the DTL lane because it corrects a label
+production level because it changes clinical meaning and will be questioned, while
+*description normalisation* belongs in the transformation level because it corrects a label
 without touching the code. Same server, same tool family, different answer.
 
 ---
@@ -482,7 +487,7 @@ flowchart LR
 Solid lines are production messages — traced, individually retryable. Dashed lines
 are the only two places anything leaves the production, both over TLS.
 
-One message through the adapter lane, from a real trace:
+One message through the production level, from a real trace:
 
 ```
 1  HL7FileIn    -> EnrichCodes    the message arrives
@@ -553,7 +558,7 @@ Two failure classes, deliberately distinguished.
 A terminology server saying "I do not recognise that code" is a data quality
 finding, not an outage.
 
-In the DTL lane the same principle applies through the last argument: pass the
+In the transformation level the same principle applies through the last argument: pass the
 existing value as the default and a failed lookup leaves the field as it was. A
 warning goes to the Event Log; the transformation succeeds.
 
@@ -600,6 +605,7 @@ settings, and the full OAuth 2 surface (`OAuth2ApplicationName`, `OAuth2GrantTyp
 | `AllowedTools` | | Blank allows every tool. Otherwise plain names, comma separated, `*` wildcard |
 | `ResultPath` | | Dotted path into the result |
 | `OnErrorAction` | `fail` | `fail`, `passthrough`, `default` |
+| `DefaultValue` | | Returned when `OnErrorAction` is `default` |
 
 ### `Agentic.Adapter.LLM`
 
@@ -611,6 +617,12 @@ settings, and the full OAuth 2 surface (`OAuth2ApplicationName`, `OAuth2GrantTyp
 | `Model` | | Model id as the provider expects it |
 | `MaxTokens` | 512 | |
 | `Temperature` | 0 | Choosing a tool should not be creative |
+| `AuthType` | `apikey` | `none`, `apikey`, `bearer`, `header`, `oauth2` |
+| `HeaderName` | `X-API-Key` | Header used when `AuthType` is `header` |
+| `APIVersion` | `2023-06-01` | Sent as `anthropic-version`. Ignored by providers that do not use it |
+
+Set `ConnectionName` and the rest are inherited from AI Settings; set them
+individually only when there is no connection to point at.
 
 ### `Agentic.Adapter.SelectorOperation`
 
@@ -670,13 +682,13 @@ example, not a shipped feature.
 
 | | |
 |---|---|
-| [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md) | Building the production, both portal UIs, with troubleshooting |
-| [docs/DTL_STEP_BY_STEP.md](docs/DTL_STEP_BY_STEP.md) | Calling MCP from a DTL, step by step |
-| [docs/WRITING_THE_PROCESS.md](docs/WRITING_THE_PROCESS.md) | The process class in full, ObjectScript and Python |
+| [docs/SETUP_WALKTHROUGH.md](docs/SETUP_WALKTHROUGH.md) | Production level — building the production, both portal UIs, with troubleshooting |
+| [docs/DTL_STEP_BY_STEP.md](docs/DTL_STEP_BY_STEP.md) | Transformation level — calling MCP from a DTL, step by step |
+| [docs/WRITING_THE_PROCESS.md](docs/WRITING_THE_PROCESS.md) | Production level — the process class in full, ObjectScript and Python |
 | [docs/EXAMPLE_HL7_ENRICHMENT.md](docs/EXAMPLE_HL7_ENRICHMENT.md) | The worked HL7 example in detail |
 | [docs/EXAMPLE_REAL_TERMINOLOGY.md](docs/EXAMPLE_REAL_TERMINOLOGY.md) | Against the live HL7 FHIR terminology server |
 | [docs/BENCHMARK.md](docs/BENCHMARK.md) | 50-message benchmark, and Python versus ObjectScript |
 | [docs/architecture.html](docs/architecture.html) | Architecture diagrams |
 | [docs/PRD.md](docs/PRD.md) | Product requirements, as user stories |
 | [docs/02_Technical_Specification.md](docs/02_Technical_Specification.md) | Design decisions and what was verified |
-| [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md) | Design notes for the DTL lane, including approaches dropped |
+| [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md) | Design notes for the transformation level, including approaches dropped |

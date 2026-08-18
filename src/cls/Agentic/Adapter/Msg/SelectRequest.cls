@@ -1,4 +1,6 @@
 /// Ask a model which MCP tool to call.
+///
+/// Part of: Production level feature — model-chosen tools. See README.
 Class Agentic.Adapter.Msg.SelectRequest Extends Ens.Request
 {
 

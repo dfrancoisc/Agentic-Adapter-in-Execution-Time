@@ -3,6 +3,8 @@
 ///
 /// Referenced from a SETTINGS declaration as:
 ///   ConnectionName:LLM Connection:selector?context={Agentic.Adapter.ContextSearch/LLMConnections}
+///
+/// Part of: Shared by both levels. See README.
 Class Agentic.Adapter.ContextSearch Extends %RegisteredObject
 {
 

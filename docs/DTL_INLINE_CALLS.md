@@ -19,7 +19,7 @@ adapter exists to provide. Both halves of that sentence matter.
 `<assign>` calling it:
 
 ```xml
-<assign value='##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd",source.{...OBX:5(1).1},"structuredContent.display")'
+<assign value='##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd","code",source.{...OBX:5(1).1},"structuredContent.display",source.{...OBX:5(1).2})'
         property='target.{...OBX:5(1).2}' action='set'/>
 ```
 

@@ -1,4 +1,6 @@
 /// Result of an MCP request.
+///
+/// Part of: Production level feature — MCP connectivity. See README.
 Class Agentic.Adapter.Msg.ToolResponse Extends Ens.Response
 {
 

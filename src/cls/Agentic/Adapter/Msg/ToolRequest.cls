@@ -2,6 +2,8 @@
 ///
 /// Deliberately flat and format-agnostic: the adapter knows nothing about the
 /// domain, so callers pass arguments as JSON and get a result back as JSON.
+///
+/// Part of: Production level feature — MCP connectivity. See README.
 Class Agentic.Adapter.Msg.ToolRequest Extends Ens.Request
 {
 
