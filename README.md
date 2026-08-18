@@ -149,7 +149,7 @@ BPLDemo   -> (caller)     StringResponse
 So a team that builds its interfaces graphically never has to write a line of
 ObjectScript to use an MCP server.
 
-#### MCPLookup — the feature for transformations and rules
+#### MCPLookup and MCPCall — the feature for transformations and rules
 
 An adapter has to hang off a business host; that is what an adapter is. A
 transformation is not a host, so there is no adapter shape available in that lane.
@@ -158,71 +158,87 @@ The feature there is a **function**.
 | Lane | What you configure |
 |---|---|
 | Productions | `Agentic.Adapter.MCP` and `Agentic.Adapter.LLM`, on hosts |
-| Transformations and rules | `MCPLookup`, naming a configured item |
+| Transformations and rules | `MCPLookup` / `MCPCall`, naming a configured item |
 
 Same protocol underneath — `Agentic.Adapter.Protocol` is shared — two surfaces,
 because the two lanes have different vocabularies.
 
-#### The standard way to call MCP from a DTL
+##### The two calls
 
-`Agentic.Adapter.Functions` ships with the module. It is the same protocol code the
-adapter uses — `Agentic.Adapter.Protocol` is shared by both, so the two cannot drift
-— and it reads the endpoint, TLS configuration and credential from a named
-production item, so a transformation names the server rather than embedding it.
-
-In a DTL assign:
-
-```
-##class(Agentic.Adapter.Functions).MCPLookup("SnomedMCP","translate_icd","code",{OBX:5.1},"structuredContent.display")
+```objectscript
+MCPCall(item, tool, argumentsJSON, resultPath, default)   // any tool, any arguments
+MCPLookup(item, tool, argument, value, resultPath, default) // one named argument
 ```
 
-Two functions are provided:
+Nothing in either is domain-specific. `tool`, `argument` and `resultPath` all come
+from the server's own catalogue — send a `ToolRequest` with `Action="list"` and read
+the `inputSchema`.
 
-| Function | For |
-|---|---|
-| `MCPLookup(item, tool, argument, value, path, default)` | one named argument in, one value out |
-| `MCPCall(item, tool, argumentsJSON, path, default)` | arbitrary arguments |
+##### Where the TLS and credentials live
 
-`item` is a production item configured with `Agentic.Adapter.MCP`, or a plain URL if
-you would rather not depend on a production at all.
+This is the part that trips people up, because a DTL is not a host and has nowhere
+to hang settings.
 
-**On bare function names.** IRIS resolves bare names like `Lookup()` inside a DTL by
-inheritance, and this was tested rather than assumed: a bare call to a function from
-a separately registered function set fails at runtime with `<UNDEFINED>` — and so, it
-turns out, does the built-in `ToUpper()` in a hand-authored DTL. The qualified
-`##class(...)` form is the one that works, so it is the one documented here. The
-function set still extends `Ens.Rule.FunctionSet`, which registers it for the Rule
-editor where bare names are the norm.
-
-**How it authenticates.** This is the part I got wrong in an earlier draft, so it is
-worth being precise. `MCPLookup` reads the named item's settings and applies them,
-so more survives than "no adapter" suggests. All verified, not assumed:
-
-| | Carried over? |
-|---|---|
-| TLS | **Yes** — `SSLConfig` from the item, or `default` for a bare `https` URL |
-| Credentials | **Yes** — bearer or basic from the IRIS credential store, via the item's `Credentials` setting |
-| OAuth 2 | No — token acquisition, caching and refresh are adapter machinery |
-| Proxy settings | No |
-| Traced production message | No |
-| Retry, failover, alerting | No |
-
-Proof, both run against live servers:
+They live on **a production item**, and the transformation names it. The item is an
+`Agentic.Adapter.Operation` configured exactly as it would be for the business
+process lane — `ServerURL`, `SSLConfig`, `Credentials`, `AuthType`.
 
 ```
-TLS          MCPCall("https://mcp.deepwiki.com/mcp", "ask_question", ...)
-             → 3,847 characters back over https
-
-credentials  item configured with Credentials=MCPDemoKey, AuthType=bearer
-             server echoed:  Bearer s3cr3t-token-value
+Production
+├── HL7FileIn                      service
+├── EnrichRouter                   business process or routing rule
+│      └── <transform> MyDTL
+│              └── MCPLookup("TxLookup", ...)      names the item ──┐
+├── TxLookup    Agentic.Adapter.Operation   ◄───────────────────────┘
+│                 ServerURL   https://terminology.example.com/mcp
+│                 SSLConfig   corporate-tls
+│                 Credentials TerminologyKey
+│                 AuthType    bearer
+└── HL7FileOut                     operation
 ```
 
-So the choice between the two lanes is not secure versus insecure. Both authenticate.
-It is whether the call needs to be an auditable, retryable event in its own right, or
-needs OAuth 2.
+Two consequences worth knowing, both verified:
 
-Failures are written to the Event Log and the function returns an empty string rather
-than raising, because an exception escaping a DTL fails the whole transformation.
+- **The item does not have to be enabled.** Disable it and no job runs, no host
+  starts, and the DTL still resolves the settings and calls the server. If only
+  transformations use that server, a disabled item is a pure configuration record.
+  If a business process also calls it, enable it and the same item serves both.
+- **The item has to exist in the production the DTL runs in.** A DTL invoked from a
+  process in production A cannot name an item that only exists in production B. Give
+  each production its own item with the same name, or pass a URL instead of an item
+  name and lose the TLS and credential resolution with it.
+
+##### Examples
+
+A terminology server, translating a diagnosis code:
+
+```
+MCPLookup("TxLookup","translate_icd","code",{OBX:5.1},"structuredContent.display",{OBX:5.2})
+```
+
+The same server, validating rather than translating — different tool, different
+argument, different result path:
+
+```
+MCPLookup("TxLookup","lookup_loinc","code",{OBX:3.1},"structuredContent.display",{OBX:3.2})
+```
+
+A documentation service that answers questions — two arguments, so `MCPCall`:
+
+```
+MCPCall("DocsMCP","ask_question",
+        "{""repoName"":""acme/spec"",""question"":""What does segment ZPD mean?""}",
+        "content.0.text")
+```
+
+An address service returning a structured result, keeping one field of it:
+
+```
+MCPLookup("AddressMCP","normalise","address",{PID:11.1},"structuredContent.line1",{PID:11.1})
+```
+
+The last argument in each is the existing value, passed as the default. Without it a
+lookup that finds nothing blanks the field it was meant to improve.
 
 **The transform.** One `<assign>`. The full class is
 `examples/Demo/DTL/EnrichInline.cls`:

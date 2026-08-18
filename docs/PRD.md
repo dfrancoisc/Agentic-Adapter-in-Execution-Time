@@ -171,6 +171,40 @@ Tagged P0 for launch, P1 important, P2 desirable.
 - **P0** — As Priya, I need the model to be unable to invoke anything directly, so
   that a wrong or manipulated answer cannot become an action.
 
+### Calling from a transformation or a rule
+
+A DTL never runs on its own. It runs inside a business process, a BPL or a routing
+rule, in a production. So the question is not only "can a transformation call an MCP
+server" but "where does that transformation get the server address, the TLS
+configuration and the credential from".
+
+- **P0** — As Maria, I need to call an MCP tool from inside a DTL, because that is
+  where field-level work lives and I do not want a business process for a lookup.
+- **P0** — As Maria, I need one shipped function rather than a class method I write
+  myself, so that ninety interfaces do not end up with ninety MCP clients.
+- **P0** — As Maria, I need that function to work with any tool on any server — the
+  argument name and the result shape come from the server's catalogue, not from
+  assumptions baked into the function.
+- **P0** — As Priya, I need the transformation to use our TLS configuration and our
+  stored credential, not a URL and a token pasted into a transformation.
+- **P0** — As Raj, I need the server configured in exactly one place, so that
+  rotating a credential does not mean editing transformations.
+- **P1** — As Raj, I need that configuration to live somewhere that does not force a
+  running host, so that a server used only by transformations does not consume a job.
+- **P0** — As Maria, I need a failed lookup to leave the field as it was, so that
+  enrichment never destroys the value it was meant to improve.
+- **P1** — As Maria, I need a failed lookup to be visible in the Event Log, so that
+  a server quietly returning nothing does not go unnoticed for a month.
+- **P0** — As Maria, I need to know, before I choose this route, what it does not
+  give me — no traced message, no retry, no OAuth 2 — so that I can choose the
+  business process when those matter.
+
+The resolution: the settings live on an ordinary production item, and the
+transformation names it. The item may be disabled — it then acts purely as a
+configuration record — and the same item serves the business process lane when one
+is present. A transformation therefore carries no endpoint, no certificate reference
+and no secret; it carries a name.
+
 ### Keeping it safe
 
 - **P0** — As Priya, I need to be able to restrict which tools an interface may

@@ -31,8 +31,27 @@ No business process. No custom MCP client. One `<assign>`.
 
 ## Step 1 — Add an MCP item to a production
 
-The item holds the server address, TLS configuration and credential. The
-transformation will name it, so nothing about the server appears in the DTL.
+A DTL is not a host and has nowhere to hang settings, so the server address, TLS
+configuration and credential live on a production item. The transformation names
+that item; it carries no endpoint, no certificate reference and no secret.
+
+```
+Production
+├── HL7FileIn                    service
+├── EnrichRouter                 business process, BPL or routing rule
+│      └── <transform> MyDTL
+│              └── MCPLookup("TxLookup", ...)     names the item ──┐
+├── TxLookup   Agentic.Adapter.Operation   ◄──────────────────────┘
+└── HL7FileOut                   operation
+```
+
+**The item does not have to be enabled.** Verified: disable it, no job runs, and the
+transformation still resolves the settings and calls the server. If only DTLs use
+that server, leave it disabled as a pure configuration record. If a business process
+calls it too, enable it and the same item serves both.
+
+**The item must exist in the production the DTL runs in.** A transformation invoked
+from a process in one production cannot name an item that lives only in another.
 
 Management Portal → Interoperability → Configure → Production → **+** on Outbound
 Hosts:
