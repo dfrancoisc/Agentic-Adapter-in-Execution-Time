@@ -10,8 +10,9 @@
 /// model to have a language model choose from the server's catalog instead - the
 /// wiring is already here.
 ///
-/// Points at tests/mock_mcp_server.py and tests/mock_llm_server.py. For real
-/// endpoints change HTTPServer/HTTPPort/URL and add SSLConfig, Credentials, AuthType.
+/// SnomedMCP points at tests/mock_mcp_server.py. ToolSelector points at a real
+/// Amazon Bedrock endpoint, authenticated with a bearer token held in the
+/// BedrockSelector credential - no secret appears in this file.
 Class Demo.HL7Enrich Extends Ens.Production
 {
 
@@ -33,7 +34,7 @@ XData ProductionDefinition
     <Setting Target="Host" Name="MCPTarget">SnomedMCP</Setting>
     <Setting Target="Host" Name="OutputTarget">HL7FileOut</Setting>
     <Setting Target="Host" Name="SelectorTarget">ToolSelector</Setting>
-    <Setting Target="Host" Name="SelectionMode">rule</Setting>
+    <Setting Target="Host" Name="SelectionMode">model</Setting>
     <Setting Target="Host" Name="RuleMap">I10=translate_icd,LN=translate_loinc,SCT=</Setting>
     <Setting Target="Host" Name="Goal">Translate this observation code to SNOMED CT</Setting>
     <Setting Target="Host" Name="SegmentType">OBX</Setting>
@@ -49,12 +50,17 @@ XData ProductionDefinition
   </Item>
 
   <Item Name="ToolSelector" Category="Enrichment" ClassName="Agentic.Adapter.SelectorOperation" PoolSize="1" Enabled="true" Foreground="false" Comment="Asks a model which tool to call; caches the answer" LogTraceEvents="true" Schedule="">
-    <Setting Target="Adapter" Name="HTTPServer">127.0.0.1</Setting>
-    <Setting Target="Adapter" Name="HTTPPort">8766</Setting>
-    <Setting Target="Adapter" Name="URL">/v1/messages</Setting>
-    <Setting Target="Adapter" Name="Provider">anthropic</Setting>
-    <Setting Target="Adapter" Name="Model">mock-model</Setting>
-    <Setting Target="Adapter" Name="AuthType">none</Setting>
+    <Setting Target="Adapter" Name="HTTPServer">bedrock-runtime.us-east-1.amazonaws.com</Setting>
+    <Setting Target="Adapter" Name="HTTPPort">443</Setting>
+    <Setting Target="Adapter" Name="URL">/model/global.anthropic.claude-sonnet-4-20250514-v1:0/converse</Setting>
+    <Setting Target="Adapter" Name="SSLConfig">default</Setting>
+    <Setting Target="Adapter" Name="Provider">bedrock</Setting>
+    <Setting Target="Adapter" Name="Model">global.anthropic.claude-sonnet-4-20250514-v1:0</Setting>
+    <Setting Target="Adapter" Name="AuthType">bearer</Setting>
+    <Setting Target="Adapter" Name="Credentials">BedrockSelector</Setting>
+    <Setting Target="Adapter" Name="MaxTokens">512</Setting>
+    <Setting Target="Adapter" Name="Temperature">0</Setting>
+    <Setting Target="Adapter" Name="ResponseTimeout">30</Setting>
     <Setting Target="Host" Name="CacheEnabled">1</Setting>
     <Setting Target="Host" Name="CacheSeconds">86400</Setting>
     <Setting Target="Host" Name="RequireKnownTool">1</Setting>

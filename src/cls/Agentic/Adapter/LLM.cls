@@ -16,9 +16,10 @@ Class Agentic.Adapter.LLM Extends EnsLib.HTTP.OutboundAdapter
 
 Parameter SETTINGS = "Provider:LLM,Model:LLM,MaxTokens:LLM,Temperature:LLM,AuthType:LLM,HeaderName:LLM,APIVersion:LLM";
 
-/// Wire format to use: anthropic, openai, or custom.
+/// Wire format to use: anthropic, bedrock, openai, or custom.
 /// openai also covers Azure OpenAI and most OpenAI-compatible gateways.
-Property Provider As %String(VALUELIST = ",anthropic,openai,custom") [ InitialExpression = "anthropic" ];
+/// bedrock uses the Amazon Bedrock Converse API, authenticated with a bearer token.
+Property Provider As %String(VALUELIST = ",anthropic,bedrock,openai,custom") [ InitialExpression = "anthropic" ];
 
 /// Model identifier, exactly as the provider expects it.
 Property Model As %String(MAXLEN = 200);
@@ -61,7 +62,8 @@ Method Send(pBody As %String) As %String [ Internal ]
         set tSecret = ..secret()
         if tSecret '= "" {
             if ..AuthType = "apikey" {
-                ; each provider names its own key header
+                ; each provider names its own key header; bedrock and openai both
+                ; take a bearer token
                 if ..Provider = "anthropic" {
                     do tReq.SetHeader("x-api-key", tSecret)
                 } else {
@@ -118,7 +120,14 @@ Method Complete(pSystem As %String, pUser As %String) As %String [ Language = py
     max_tokens = int(self.MaxTokens or 512)
     temperature = float(self.Temperature or 0)
 
-    if provider == "openai":
+    if provider == "bedrock":
+        # Amazon Bedrock Converse API. The model is named in the URL, not the body,
+        # and content is a list of typed blocks rather than a bare string.
+        body = {"messages": [{"role": "user", "content": [{"text": pUser}]}],
+                "system": [{"text": pSystem}],
+                "inferenceConfig": {"maxTokens": max_tokens,
+                                    "temperature": temperature}}
+    elif provider == "openai":
         body = {"model": model,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
@@ -158,9 +167,20 @@ Method Complete(pSystem As %String, pUser As %String) As %String [ Language = py
 Method extractText(msg, provider As %String) As %String [ Internal, Language = python ]
 {
     usage = msg.get("usage") or {}
-    # anthropic reports input_tokens/output_tokens, openai prompt_tokens/completion_tokens
-    self.LastInputTokens = int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0)
-    self.LastOutputTokens = int(usage.get("output_tokens") or usage.get("completion_tokens") or 0)
+    # anthropic input_tokens/output_tokens, openai prompt_tokens/completion_tokens,
+    # bedrock inputTokens/outputTokens
+    self.LastInputTokens = int(usage.get("input_tokens") or usage.get("prompt_tokens")
+                               or usage.get("inputTokens") or 0)
+    self.LastOutputTokens = int(usage.get("output_tokens") or usage.get("completion_tokens")
+                                or usage.get("outputTokens") or 0)
+
+    if provider == "bedrock":
+        blocks = ((msg.get("output") or {}).get("message") or {}).get("content") or []
+        for b in blocks:
+            if isinstance(b, dict) and b.get("text"):
+                return b["text"]
+        self.LastError = "no text in Bedrock response"
+        return ""
 
     if provider == "openai":
         choices = msg.get("choices") or []
