@@ -72,7 +72,7 @@ does not, and reach for the four lines above instead:
 | Use the answer to **route** rather than modify | Your own process or a BPL |
 | Call a tool and forward nothing | A business operation of your own |
 | Several different tools in sequence | A BPL, calling the MCP item repeatedly |
-| Call from a routing rule or transformation | Works, with real trade-offs — see [docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md) |
+| Call from a DTL or routing rule | Works, with real trade-offs — see below |
 
 None of those need a change to the adapter. They are different callers of the same
 configured item.
@@ -148,6 +148,83 @@ BPLDemo   -> (caller)     StringResponse
 
 So a team that builds its interfaces graphically never has to write a line of
 ObjectScript to use an MCP server.
+
+#### Verified: calling it from inside a DTL
+
+A transformation can call an MCP server directly, with no business process, no
+operation and no adapter. This is the simplest option and the one that gives up the
+most — read both halves before choosing it.
+
+**1. A function the DTL can call.** `examples/Demo/MCPFunctions.cls` extends
+`Ens.Rule.FunctionSet` and speaks MCP itself, in Embedded Python. It takes either a
+production item name — borrowing that item's endpoint — or a plain URL:
+
+```objectscript
+ClassMethod MCPCall(pItem As %String, pTool As %String,
+                    pValue As %String, pPath As %String) As %String [ Language = python ]
+```
+
+**2. The DTL.** One `<assign>`. The full class is
+`examples/Demo/DTL/EnrichInline.cls`:
+
+```xml
+<transform sourceClass='EnsLib.HL7.Message' targetClass='EnsLib.HL7.Message'
+           sourceDocType='2.5:ORU_R01' targetDocType='2.5:ORU_R01'
+           create='copy' language='objectscript'>
+
+  <assign action='set'
+          value='##class(Demo.MCPFunctions).MCPCall("SnomedMCP","translate_icd",source.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).1},"structuredContent.display")'
+          property='target.{PIDgrpgrp(1).ORCgrp(1).OBXgrp(1).OBX:5(1).2}'/>
+
+</transform>
+```
+
+Read it right to left: take the code in OBX-5.1, ask the MCP server what it means,
+put the answer in OBX-5.2. `create='copy'` matters — it carries the rest of the
+message through untouched, and avoids the missing segment terminator that
+`create='new'` produces on an HL7 target.
+
+**3. The result**, running against a live server:
+
+```
+in   OBX-5:  E11.9^WRONG DESCRIPTION^I10
+out  OBX-5:  E11.9^Diabetes mellitus type 2^I10
+```
+
+**4. What it depends on**, tested with the production stopped and the endpoint given
+as a plain URL:
+
+| | Needed? |
+|---|---|
+| A running production | No |
+| A production item for the server | Only if you name one instead of passing a URL |
+| `Agentic.Adapter.MCP` | No — the function speaks MCP itself |
+| An interoperability-enabled namespace | Yes, because a DTL is itself an interoperability artifact |
+
+#### Choosing between them
+
+| | DTL inline | Business process |
+|---|---|---|
+| Moving parts | One function | A process plus an operation |
+| In the Visual Trace | Nothing | Its own message, with timing and body |
+| TLS | Yours to arrange | Inherited |
+| Credentials, OAuth 2 | Bearer at best | Inherited |
+| Retry, failover, alerting | None | The production's |
+| A slow server | Blocks the transformation | Times out and retries per configuration |
+| Model-chosen tools | Not available | Available |
+
+The DTL route is genuinely simpler and genuinely independent — and what it buys with
+that simplicity is exactly the three things that justified building the adapter. For
+a fast, unauthenticated lookup nobody will audit, it is a fair trade. For a clinical
+interface, route it through the business process.
+
+There is a third shape if the one-line DTL ergonomics are what appeal: do the lookup
+in a business process *before* the transform and pass the answer in. The DTL then
+reads a value already in hand, and the call stays a traced, retryable message. That
+is what the shipped `EnrichmentProcess` already does.
+
+Full write-up, including why the function cannot simply borrow the adapter:
+[docs/DTL_INLINE_CALLS.md](docs/DTL_INLINE_CALLS.md).
 
 ## Architecture
 
