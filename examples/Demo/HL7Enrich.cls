@@ -50,14 +50,8 @@ XData ProductionDefinition
   </Item>
 
   <Item Name="ToolSelector" Category="Enrichment" ClassName="Agentic.Adapter.SelectorOperation" PoolSize="1" Enabled="true" Foreground="false" Comment="Asks a model which tool to call; caches the answer" LogTraceEvents="true" Schedule="">
-    <Setting Target="Adapter" Name="HTTPServer">bedrock-runtime.us-east-1.amazonaws.com</Setting>
-    <Setting Target="Adapter" Name="HTTPPort">443</Setting>
-    <Setting Target="Adapter" Name="URL">/model/global.anthropic.claude-sonnet-4-20250514-v1:0/converse</Setting>
-    <Setting Target="Adapter" Name="SSLConfig">default</Setting>
-    <Setting Target="Adapter" Name="Provider">bedrock</Setting>
-    <Setting Target="Adapter" Name="Model">global.anthropic.claude-sonnet-4-20250514-v1:0</Setting>
-    <Setting Target="Adapter" Name="AuthType">bearer</Setting>
-    <Setting Target="Adapter" Name="Credentials">BedrockSelector</Setting>
+    <Setting Target="Adapter" Name="ConnectionName">bedrock-default</Setting>
+    <Setting Target="Adapter" Name="ConnectionNamespace">HSCUSTOM</Setting>
     <Setting Target="Adapter" Name="MaxTokens">512</Setting>
     <Setting Target="Adapter" Name="Temperature">0</Setting>
     <Setting Target="Adapter" Name="ResponseTimeout">30</Setting>

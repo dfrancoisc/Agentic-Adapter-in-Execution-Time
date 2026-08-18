@@ -310,6 +310,46 @@ on every message something the data states outright.
 Model mode is the escape hatch: open intent, unfamiliar servers, or catalogs that
 change under you.
 
+### Why two adapters, and how they relate
+
+They are two different external systems, speaking two different protocols, with two
+different sets of credentials. In IRIS, one adapter means one external connection —
+that is the whole point of the concept.
+
+| | `Agentic.Adapter.MCP` | `Agentic.Adapter.LLM` |
+|---|---|---|
+| Talks to | An MCP server | A model provider |
+| Protocol | JSON-RPC 2.0: `tools/list`, `tools/call` | Vendor chat API: Bedrock Converse, Anthropic Messages, OpenAI |
+| Credential | The terminology vendor's | Your AWS or Anthropic key |
+| Fails when | The terminology service is down | The model provider throttles you |
+
+Merging them would mean one host holding two connections to two vendors, and when
+something failed you could not say which — retry, failover and timeout would all
+become ambiguous. They are separate for the same reason a database adapter and an
+FTP adapter are separate.
+
+**The model never talks to the MCP server.** This is the part that surprises people.
+The two adapters have no connection to each other at all. The business process is
+the only thing that touches both:
+
+```
+1. process → MCP adapter    tools/list        "what can you do?"
+2. MCP adapter → process    catalog as JSON
+3. process → LLM adapter    goal + that catalog, as TEXT
+4. LLM adapter → process    {"tool": "translate_icd", ...}, as TEXT
+5. process → MCP adapter    tools/call translate_icd
+```
+
+At step 3 the catalog is just characters in a prompt. At step 4 the answer is just
+characters coming back. The model has no network path to the terminology server, no
+credentials for it, and no ability to invoke anything. It reads a description and
+returns a name.
+
+That is a security property worth keeping. The model can only *suggest* a tool; the
+MCP adapter then checks that name against `AllowedTools` before anything is called.
+A model that hallucinates a tool, or is talked into naming a destructive one, gets
+refused by configuration it cannot see or influence.
+
 ### The selector
 
 `Agentic.Adapter.SelectorOperation` is the agentic layer, and it is an outbound host
@@ -320,10 +360,31 @@ the trace holds what the model was asked, what it answered, and why.
 It selects a tool. It does not call one, and it never sees a whole clinical message
 — only the goal, the catalog, and whichever discriminating fields the caller sends.
 
-`Agentic.Adapter.LLM` is its adapter: provider-neutral (`anthropic`, `openai`, or
-`custom` wire format) and, like the MCP adapter, extending
+`Agentic.Adapter.LLM` is its adapter: provider-neutral (`bedrock`, `anthropic`,
+`openai`, or `custom` wire format) and, like the MCP adapter, extending
 `EnsLib.HTTP.OutboundAdapter` so TLS, credentials and OAuth 2 are inherited rather
 than reimplemented.
+
+#### Point it at a connection you already configured
+
+Rather than restating the endpoint, model and key on every production, name a
+connection from AI Settings and the adapter inherits all of it:
+
+| Setting | Value |
+|---|---|
+| `ConnectionName` | `bedrock-default` |
+| `ConnectionNamespace` | namespace holding the connection data, if not this one |
+
+That resolves the provider, model, region, endpoint and API key at host start. The
+endpoint follows from the provider — Bedrock becomes
+`bedrock-runtime.<region>.amazonaws.com/model/<model>/converse` — and the key is
+read from the wallet into memory for the life of the job, never persisted and never
+logged. One place to rotate a key or change model, for every production that
+references it.
+
+It is an optional soft dependency: with no AI Settings installed, the adapter falls
+back to its own `Provider` / `Model` / `Credentials` settings and the module stays
+standalone.
 
 ### Caching is what makes model mode affordable
 

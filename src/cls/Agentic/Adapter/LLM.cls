@@ -14,7 +14,25 @@
 Class Agentic.Adapter.LLM Extends EnsLib.HTTP.OutboundAdapter
 {
 
-Parameter SETTINGS = "Provider:LLM,Model:LLM,MaxTokens:LLM,Temperature:LLM,AuthType:LLM,HeaderName:LLM,APIVersion:LLM";
+Parameter SETTINGS = "ConnectionName:LLM Connection,ConnectionNamespace:LLM Connection,Provider:LLM,Model:LLM,MaxTokens:LLM,Temperature:LLM,AuthType:LLM,HeaderName:LLM,APIVersion:LLM";
+
+/// Name of a connection already configured in AI Settings, e.g. bedrock-default.
+///
+/// When set, the provider, model, endpoint and API key are all taken from that
+/// connection and the settings below are ignored. One place to change the model,
+/// rotate the key, or switch provider — for every production that references it.
+///
+/// This is an optional, soft dependency: if the AI Settings classes are not present
+/// the adapter falls back to the individual settings, so the module stays standalone.
+Property ConnectionName As %String(MAXLEN = 100);
+
+/// Namespace holding the AI Settings connection data, if it is not this one.
+/// The connection classes may be mapped everywhere while their data is not.
+Property ConnectionNamespace As %String;
+
+/// Secret resolved from the connection. Held in memory for the life of the host
+/// job, never persisted, never logged.
+Property resolvedSecret As %String(MAXLEN = 4000) [ Internal, Private ];
 
 /// Wire format to use: anthropic, bedrock, openai, or custom.
 /// openai also covers Azure OpenAI and most OpenAI-compatible gateways.
@@ -100,9 +118,80 @@ Method Send(pBody As %String) As %String [ Internal ]
     quit tBody
 }
 
-/// Resolve the configured credential's password. Never logged, never a setting.
+/// Pull provider, model, endpoint and key from a connection configured in AI
+/// Settings. Called once when the host starts.
+Method OnInit() As %Status
+{
+    if ..ConnectionName = "" quit $$$OK
+    quit ..resolveConnection()
+}
+
+Method resolveConnection() As %Status [ Internal ]
+{
+    set tSC = $$$OK
+    try {
+        if '##class(%Dictionary.CompiledClass).%ExistsId("AgenticInterop.Connections") {
+            set tSC = $$$ERROR($$$GeneralError, "ConnectionName is set but AI Settings connections are not installed in this instance")
+            quit
+        }
+
+        set tProvider = "", tModel = "", tRegion = "", tMax = ""
+        new $namespace
+        if ..ConnectionNamespace '= "" { set $namespace = ..ConnectionNamespace }
+
+        set tRs = ##class(%SQL.Statement).%ExecDirect(, "SELECT Provider,Model,Region,MaxTokens FROM AgenticInterop_Data.LLMConnection WHERE Name = ?", ..ConnectionName)
+        if 'tRs.%Next() {
+            set tSC = $$$ERROR($$$GeneralError, "connection '"_..ConnectionName_"' not found in namespace "_$namespace)
+            quit
+        }
+        set tProvider = tRs.%Get("Provider")
+        set tModel = tRs.%Get("Model")
+        set tRegion = tRs.%Get("Region")
+        set tMax = tRs.%Get("MaxTokens")
+
+        ; the wallet is instance-wide, and stores the secret wrapped as JSON
+        set tRaw = ##class(%Wallet.KeyValue).GetSecretValue("AgenticInteropConnections."_..ConnectionName)
+        if tRaw = "" {
+            set tSC = $$$ERROR($$$GeneralError, "connection '"_..ConnectionName_"' has no stored secret")
+            quit
+        }
+        set ..resolvedSecret = ##class(%DynamicAbstractObject).%FromJSON(tRaw).value
+
+        set ..Provider = tProvider
+        set ..Model = tModel
+        if (tMax '= "") && (+tMax > 0) && (+..MaxTokens = 0) { set ..MaxTokens = tMax }
+        if ..AuthType = "" { set ..AuthType = "bearer" }
+        if ..SSLConfig = "" { set ..SSLConfig = "default" }
+        set ..HTTPPort = 443
+
+        ; endpoint follows from the provider and region
+        if tProvider = "bedrock" {
+            set ..HTTPServer = "bedrock-runtime."_tRegion_".amazonaws.com"
+            set ..URL = "/model/"_tModel_"/converse"
+        } elseif tProvider = "anthropic" {
+            set ..HTTPServer = "api.anthropic.com"
+            set ..URL = "/v1/messages"
+        } elseif tProvider = "openai" {
+            set ..HTTPServer = "api.openai.com"
+            set ..URL = "/v1/chat/completions"
+        } else {
+            set tSC = $$$ERROR($$$GeneralError, "connection provider '"_tProvider_"' has no known endpoint; set HTTPServer and URL manually")
+            quit
+        }
+
+        $$$LOGINFO("LLM connection '"_..ConnectionName_"' resolved: "_tProvider_" "_tModel_" via "_..HTTPServer)
+    }
+    catch ex {
+        set tSC = ex.AsStatus()
+    }
+    quit tSC
+}
+
+/// Resolve the credential's password, or the key from the named connection.
+/// Never logged, never a setting.
 Method secret() As %String [ Internal ]
 {
+    if ..resolvedSecret '= "" quit ..resolvedSecret
     if ..Credentials = "" quit ""
     set tSC = ##class(Ens.Config.Credentials).GetCredentialsObj(.tCred, $classname(), "Ens.Config.Credentials", ..Credentials)
     if $$$ISERR(tSC) || '$isobject(tCred) quit ""
