@@ -77,6 +77,78 @@ does not, and reach for the four lines above instead:
 None of those need a change to the adapter. They are different callers of the same
 configured item.
 
+#### Verified: calling it from a BPL
+
+The MCP item is an ordinary business operation, so a graphical business process can
+use it. This was tested, not assumed.
+
+**1. The BPL.** One `<call>`, no ObjectScript of your own. The full class is
+`examples/Demo/Process/CallMCPFromBPL.cls`, a plain `Ens.BusinessProcessBPL` that
+inherits nothing from this module:
+
+```xml
+<process language='objectscript' request='Ens.StringRequest' response='Ens.StringResponse'>
+<context>
+  <property name='Answer' type='%String' initialexpression='""'/>
+  <property name='Failed' type='%Boolean' initialexpression='0'/>
+</context>
+<sequence>
+
+  <call name='Translate' target='SnomedMCP' async='0'>
+    <request type='Agentic.Adapter.Msg.ToolRequest'>
+      <assign property="callrequest.ToolName"       value='"translate_icd"' action="set"/>
+      <assign property="callrequest.ArgumentsJSON"  value='"{""code"":"""_request.StringValue_"""}"' action="set"/>
+      <assign property="callrequest.ResultPath"     value='"structuredContent.display"' action="set"/>
+    </request>
+    <response type='Agentic.Adapter.Msg.ToolResponse'>
+      <assign property="context.Answer" value='callresponse.ResultJSON' action="set"/>
+      <assign property="context.Failed" value='callresponse.IsError' action="set"/>
+    </response>
+  </call>
+
+  <if name='Recognised' condition='context.Failed=0'>
+    <true>
+      <assign property="response.StringValue" value='context.Answer' action="set"/>
+    </true>
+    <false>
+      <assign property="response.StringValue" value='"code not recognised"' action="set"/>
+    </false>
+  </if>
+
+</sequence>
+</process>
+```
+
+`target='SnomedMCP'` is the **config item name** of the MCP operation — not a class
+name. That is the only coupling between the BPL and this module, besides the two
+message types.
+
+**2. The production item.** Add the BPL as a Process host. Nothing else to configure
+— the server, credentials and TLS all live on the MCP item it calls:
+
+```xml
+<Item Name="BPLDemo" ClassName="Demo.Process.CallMCPFromBPL"
+      PoolSize="1" Enabled="true" Category="Enrichment"/>
+```
+
+**3. The result**, run against the live production, both branches:
+
+```
+E11.9   ->  Diabetes mellitus type 2
+NOPE.1  ->  code not recognised          (the isError branch)
+```
+
+and traced as ordinary production messages:
+
+```
+BPLDemo   -> SnomedMCP    ToolRequest
+SnomedMCP -> BPLDemo      ToolResponse
+BPLDemo   -> (caller)     StringResponse
+```
+
+So a team that builds its interfaces graphically never has to write a line of
+ObjectScript to use an MCP server.
+
 ## Architecture
 
 ```mermaid
@@ -190,30 +262,6 @@ In IRIS one adapter means one external connection. Merging them would put two
 vendors behind one host, and when something failed you could not say which — retry,
 failover and timeout would all become ambiguous. They are separate for the same
 reason a SQL adapter and an FTP adapter are separate.
-
-### The model never talks to the MCP server
-
-This surprises people. The two adapters have no connection to each other at all.
-The business process is the only thing that touches both:
-
-```
-1. process → MCP adapter    tools/list                 "what can you do?"
-2. MCP adapter → process    the catalog, as JSON
-3. process → LLM adapter    goal + that catalog, as TEXT in a prompt
-4. LLM adapter → process    {"tool":"translate_icd"}, as TEXT
-5. process → MCP adapter    tools/call translate_icd
-```
-
-At step 3 the catalog is characters in a prompt. At step 4 the answer is characters
-coming back. The model has no network path to your tool server, no credentials for
-it, and no ability to invoke anything.
-
-That is a security property worth keeping. The model can only *suggest* a tool name;
-the MCP adapter then checks that name against `AllowedTools` before anything runs. A
-model that hallucinates a tool, or is talked into naming a destructive one, is
-refused by configuration it cannot see or influence.
-
----
 
 ## Worked scenario, end to end
 
