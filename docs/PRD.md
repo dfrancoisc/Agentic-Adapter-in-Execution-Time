@@ -118,8 +118,9 @@ Tagged P0 for launch, P1 important, P2 desirable.
 ### Connecting to a service
 
 - **P0** — As Maria, I need to point a production item at an external tool service
-  by typing a hostname and a path, so that adding a service is configuration rather
-  than a development ticket.
+  by pasting the URL from its documentation, so that adding a service is
+  configuration rather than a development ticket, and I am not decomposing an
+  address into host, port and path by hand.
 - **P0** — As Priya, I need credentials to resolve from the IRIS credential store or
   an OAuth 2 client configuration, so that no secret is typed into a setting, written
   to a production definition, or committed to source control.
@@ -169,8 +170,12 @@ Tagged P0 for launch, P1 important, P2 desirable.
 
 ### Keeping it safe
 
-- **P0** — As Priya, I need to restrict which tools an interface may invoke, so that
-  a service exposing destructive tools cannot be misused from a clinical flow.
+- **P0** — As Priya, I need to be able to restrict which tools an interface may
+  invoke, so that a service exposing destructive tools cannot be misused from a
+  clinical flow — while the default remains "whatever the server offers", because
+  Maria does not know a catalogue before she calls it.
+- **P1** — As Maria, I need that restriction expressed as tool names, not as a
+  regular expression, because I am configuring a production and not writing code.
 - **P0** — As Maria, I need a tool that ran and reported failure to be distinguishable
   from a service that is down, so that I handle a bad code differently from an outage.
 - **P0** — As Maria, I need to choose whether a failed enrichment fails the message,
@@ -187,10 +192,17 @@ Tagged P0 for launch, P1 important, P2 desirable.
 
 - **P0** — As Raj, I need to install once per instance and have every namespace see
   it, so that I am not repeating deployment per namespace.
+- **P0** — As Raj, I need it to install as a standard package on any supported IRIS,
+  so that deployment is the same as everything else I run.
+- **P1** — As Raj, I need it to refuse to install on an unsupported version, so that
+  I find out at install time rather than from a failed interface.
 - **P1** — As Raj, I need message data to stay namespace-local, so that one
   production cannot see another's traffic.
 - **P1** — As Raj, I need to name a model connection already configured elsewhere,
   so that rotating a key or changing model is one edit rather than one per interface.
+- **P1** — As Maria, I need to pick that connection from a list of what is actually
+  configured, so that I am not typing a name from memory and discovering the typo at
+  runtime.
 - **P1** — As Maria, I need a per-call timeout below the calling host's own, so that
   a slow service backs off rather than backing up a queue.
 - **P2** — As Raj, I need throughput figures for a realistic message volume, so that
@@ -203,6 +215,8 @@ Tagged P0 for launch, P1 important, P2 desirable.
   protocol handling per interface.
 - **P1** — As Maria, I need the same approach to work for HL7, FHIR and X12, so that
   learning it once pays off across the estate.
+- **P1** — As Maria, I need to write that part in ObjectScript or in Python,
+  whichever my team maintains, without a performance penalty for choosing.
 
 ---
 
@@ -212,6 +226,10 @@ Tagged P0 for launch, P1 important, P2 desirable.
 - Adapter overhead, excluding the remote service, negligible against network time.
   Measured: 50 messages and 400 traced production messages in about 3 s with
   selections cached.
+- The implementation language of the process must not be a performance
+  consideration. Measured: 3.59 s versus 3.65 s over 50 messages for Python and
+  ObjectScript run concurrently in separate namespaces — a difference under 2%, and
+  about 15 µs per message when isolated to the methods themselves.
 - Model-based selection must be cached, or it is not viable at interface volumes.
   Measured: 2 model calls served 50 messages.
 - Per-call timeout configurable and below the calling host's response timeout.
@@ -266,7 +284,7 @@ Tagged P0 for launch, P1 important, P2 desirable.
 
 | # | Question | Owner | Status |
 |---|---|---|---|
-| 1 | Minimum supported IRIS / Health Connect version. Verified only on 2026.2 | Eng | Open |
+| 1 | Minimum supported version is set at 2026.2 and enforced at install. Whether earlier releases could be supported is untested | Eng | Open |
 | 2 | Does any target service need OAuth 2 flows beyond client credentials? | Eng | Open |
 | 3 | Should one production item ever fan out across several services? | PM | Open |
 | 4 | Guidance on clinical data leaving the boundary — formal position, or reviewed documentation? | Compliance | Open |

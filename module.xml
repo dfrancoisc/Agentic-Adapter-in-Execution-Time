@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Export generator="IRIS">
-<Document name="agentic-mcp-adapter.ZPM">
+<Document name="agentic-adapter-in-execution-time.ZPM">
 <Module>
   <Name>agentic-adapter-in-execution-time</Name>
-  <Version>0.1.0</Version>
-  <Description>Generic MCP (Model Context Protocol) outbound adapter for InterSystems IRIS interoperability productions.</Description>
-  <Keywords>mcp adapter interoperability production iris healthconnect</Keywords>
+  <Version>1.0.0</Version>
+  <Description>Call an MCP (Model Context Protocol) server from an IRIS interoperability production while a message is in flight, configured rather than coded. Includes an optional language-model tool selector.</Description>
+  <Keywords>mcp adapter interoperability production iris healthconnect hl7 fhir terminology</Keywords>
   <Packaging>module</Packaging>
   <SourcesRoot>src/cls</SourcesRoot>
-  <Resource Name="Agentic.Adapter.PKG"/>
+
+  <!-- Agentic.PKG rather than Agentic.Adapter.PKG: the installer lives in
+       Agentic.Install and must ship with the module, while only Agentic.Adapter
+       is mapped to the shared database. -->
+  <Resource Name="Agentic.PKG"/>
+
+  <!-- Refuse to install on a version without the OAuth 2 adapter settings and
+       Embedded Python support this depends on. -->
+  <Invoke Class="Agentic.Install" Method="CheckVersion" CheckStatus="true" Phase="Verify"/>
 </Module>
 </Document>
 </Export>

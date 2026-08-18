@@ -22,6 +22,26 @@ Parameter DBNAME = "AGENTICLIB";
 /// Package mapped to every namespace.
 Parameter PACKAGE = "Agentic.Adapter";
 
+/// Minimum IRIS version. 2026.2 is where this was developed and verified; earlier
+/// versions may work but have not been tested.
+Parameter MINVERSION As STRING = "2026.2";
+
+/// Refuse to install on a version this has not been verified against.
+/// Called by IPM during the Verify phase.
+ClassMethod CheckVersion() As %Status
+{
+    set tVersion = $system.Version.GetNumber()
+    set tMajor = +$piece(tVersion, ".", 1)
+    set tMinor = +$piece(tVersion, ".", 2)
+    set tWantMajor = +$piece(..#MINVERSION, ".", 1)
+    set tWantMinor = +$piece(..#MINVERSION, ".", 2)
+
+    if (tMajor > tWantMajor) || ((tMajor = tWantMajor) && (tMinor >= tWantMinor)) {
+        quit $$$OK
+    }
+    quit $$$ERROR($$$GeneralError, "agentic-adapter-in-execution-time requires IRIS "_..#MINVERSION_" or later; this instance is "_tVersion)
+}
+
 /// Create the shared database and map the adapter package into all namespaces.
 /// pDirectory defaults to <mgr>/agenticlib.
 ClassMethod Setup(pDirectory As %String = "", pDBName As %String = {..#DBNAME}) As %Status

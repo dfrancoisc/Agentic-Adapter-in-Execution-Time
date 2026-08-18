@@ -95,8 +95,15 @@ parameters.
 |---|---|---|
 | `Agentic.Adapter.MCP` | Outbound adapter | Connection, security, protocol, filtering, extraction |
 | `Agentic.Adapter.Operation` | Business operation | Optional ready-made host. Any operation may use the adapter instead |
-| `Agentic.Adapter.Msg.ToolRequest` | `Ens.Request` | `ToolName`, `ArgumentsJSON`, `ResultPath` |
+| `Agentic.Adapter.LLM` | Outbound adapter | Model provider: bedrock, anthropic, openai, custom |
+| `Agentic.Adapter.SelectorOperation` | Business operation | Model-based tool selection, with caching |
+| `Agentic.Adapter.EnrichmentProcess` | Business process, abstract | Orchestration: catalog, selection, invocation, error policy |
+| `Agentic.Adapter.ContextSearch` | Registered object | Dropdown providers for settings |
+| `Agentic.Adapter.Msg.ToolRequest` | `Ens.Request` | `Action`, `ToolName`, `ArgumentsJSON`, `ResultPath` |
 | `Agentic.Adapter.Msg.ToolResponse` | `Ens.Response` | `ResultJSON`, `IsError`, `ErrorText`, `DurationMs`, `ToolName` |
+| `Agentic.Adapter.Msg.SelectRequest` | `Ens.Request` | `Goal`, `CatalogJSON`, `ContextJSON`, `CacheKey` |
+| `Agentic.Adapter.Msg.SelectResponse` | `Ens.Response` | `ToolName`, `ArgumentsJSON`, `Reason`, `FromCache`, token counts |
+| `Agentic.Install` | Registered object | Shared-database installer. Not mapped |
 
 Message classes are deliberately flat scalars: format-agnostic, cheap to persist, and
 readable in the Visual Trace without a viewer.
@@ -135,6 +142,7 @@ of truth.
 
 | Setting | Default | Purpose |
 |---|---|---|
+| `ServerURL` | | The server address as a URL. Expanded into `HTTPServer`, `HTTPPort` and `URL` at host start, selecting the default TLS configuration for `https` |
 | `ProtocolVersion` | `2025-06-18` | Negotiated MCP version, sent as `MCP-Protocol-Version` |
 | `ClientName` | `IRIS-MCP-Adapter` | Reported in the handshake |
 | `AuthType` | `none` | `none`, `basic`, `bearer`, `header`, `oauth2` |
@@ -149,7 +157,10 @@ of truth.
 `header` are applied in `Send()` from the configured credential's password, resolved
 through `Ens.Config.Credentials.GetCredentialsObj()` — never from a setting value.
 
-`AllowedTools` is deny-by-default: blank permits only `ToolName`.
+`AllowedTools` is allow-by-default: blank permits every tool the server offers,
+which is correct because a catalogue is not known before it is fetched. When set, it
+is a comma separated list of plain tool names with `*` as a wildcard — not a regular
+expression, because the person configuring a production should not have to write one.
 
 ---
 
@@ -160,9 +171,10 @@ pagination, `tools/call` including `isError` and content blocks, `ping`. Session
 identity carried in `Mcp-Session-Id`, captured from the initialize response and sent
 on every subsequent request for the life of the host job.
 
-`Accept: application/json` is sent so servers return a single JSON response rather
-than an SSE stream. Servers that insist on `text/event-stream` are not yet supported;
-SSE parsing is deferred until a target requires it.
+`Accept: application/json, text/event-stream` is sent, as the specification requires
+of clients, and a JSON-RPC payload is unwrapped from SSE data lines when a server
+answers that way. This is not theoretical: of three public MCP servers tested, two
+replied with `text/event-stream` even to a request asking for JSON.
 
 Not implemented: resources, prompts, sampling, roots, server-initiated requests,
 notification streams, `stdio` transport.
@@ -235,12 +247,30 @@ recommended for per-message field-level enrichment at HL7 volumes.
 
 ## 10. Deployment
 
-Standalone IPM module, no dependencies:
+Standalone IPM module, version 1.0.0, no dependencies.
+
+Requires IRIS, IRIS for Health or Health Connect **2026.2 or later**. The module
+enforces this during the IPM Verify phase via `Agentic.Install.CheckVersion()` and
+refuses to install on anything earlier.
+
+Install once per instance:
 
 ```
-zpm "load /path/to/Agentic-Adapter-in-Execution-Time"
+do $system.OBJ.Load("<path>/src/cls/Agentic/Install.cls","ck")
+do ##class(Agentic.Install).Setup()
+zpm "load <path>"
 ```
 
-Requires an interoperability-enabled namespace and an IRIS version providing
-Embedded Python and the OAuth 2 adapter settings. Verified on 2026.2; the minimum
-supported version is an open question in the PRD.
+`Setup()` creates the `AGENTICLIB` database, creates the `%ALL` pseudo-namespace when
+absent, and maps the `Agentic.Adapter` package into it. The module resource is
+`Agentic.PKG` rather than `Agentic.Adapter.PKG` so the installer ships with the
+module while remaining outside the mapped package.
+
+IPM must be enabled in the namespace the load runs from — it is not enabled in every
+namespace by default, and `USER` and foundation namespaces frequently lack it. Any
+IPM-enabled namespace will do, because the mapping places the code in the shared
+database wherever the load happens.
+
+Verified from clean: mappings removed, all classes deleted, `Setup()` re-run, module
+installed via `zpm load`, `Verify()` reporting the adapter visible in all seven
+namespaces, and an HL7 message enriched end to end afterwards.

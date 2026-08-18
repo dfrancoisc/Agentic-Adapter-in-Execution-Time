@@ -93,6 +93,10 @@ The terminology service is external, on the public internet, behind OAuth 2.
 
 ### Step 1 — Install once, for the whole instance
 
+**Requires IRIS, IRIS for Health or Health Connect 2026.2 or later.** The module
+refuses to install on anything earlier — it depends on the OAuth 2 adapter settings
+and on Embedded Python behaviour verified on that release.
+
 The adapter lives in a shared database mapped to every namespace, so you install it
 once and namespaces created later pick it up automatically.
 
@@ -100,16 +104,29 @@ once and namespaces created later pick it up automatically.
 docker cp /path/to/Agentic-Adapter-in-Execution-Time <container>:/opt/mcpadapter
 ```
 
-Then in an IRIS session:
+In an IRIS session, create the shared database and the mapping:
 
 ```
-do $system.OBJ.Load("/opt/mcpadapter/setup/Agentic/Install.cls","ck")
+do $system.OBJ.Load("/opt/mcpadapter/src/cls/Agentic/Install.cls","ck")
 do ##class(Agentic.Install).Setup()
-zpm "load /opt/mcpadapter"
 ```
 
 `Setup()` creates the `AGENTICLIB` database, creates the `%ALL` pseudo-namespace if
-the instance lacks one, and maps the `Agentic.Adapter` package into it. Confirm:
+the instance lacks one, and maps the `Agentic.Adapter` package into it.
+
+Then install the module:
+
+```
+zpm "load /opt/mcpadapter"
+```
+
+**IPM must be enabled in the namespace you load from.** It is not enabled everywhere
+by default — `USER` and foundation namespaces often lack it, and `zpm` will tell you
+which namespaces have it. Any of them will do, because the mapping puts the code in
+the shared database wherever you load it. To enable it everywhere:
+`zpm "enable -map -globally"`.
+
+Confirm:
 
 ```
 do ##class(Agentic.Install).Verify()
@@ -118,12 +135,30 @@ do ##class(Agentic.Install).Verify()
 ```
               FHIR : adapter visible
           HSCUSTOM : adapter visible
+             HSLIB : adapter visible
+             HSSYS : adapter visible
+    HSSYSLOCALTEMP : adapter visible
+             PAYER : adapter visible
               USER : adapter visible
 ```
 
 Only code is shared. Message data stays per-namespace, so no production can see
-another's traffic. `Unmap()` reverses it. Prefer a single namespace? Skip the
-installer and `zpm "load"` where you want it.
+another's traffic. `Unmap()` reverses the mapping and leaves the database in place.
+
+Prefer a single namespace? Skip `Setup()` and just `zpm "load"` where you want it.
+
+#### What gets installed
+
+| Class | Purpose |
+|---|---|
+| `Agentic.Adapter.MCP` | The MCP outbound adapter |
+| `Agentic.Adapter.Operation` | Ready-made business operation for it |
+| `Agentic.Adapter.LLM` | Outbound adapter for a model provider |
+| `Agentic.Adapter.SelectorOperation` | Asks a model which tool to call, and caches the answer |
+| `Agentic.Adapter.EnrichmentProcess` | Abstract base for your enrichment process |
+| `Agentic.Adapter.ContextSearch` | Dropdown provider for settings |
+| `Agentic.Adapter.Msg.*` | Request and response messages |
+| `Agentic.Install` | The installer. Deliberately not mapped — a one-time bootstrap |
 
 ### Step 2 — TLS
 
@@ -422,6 +457,35 @@ Optionally override `BuildArguments()` when a tool wants a different argument sh
 and `CloneMessage()` when a deep clone is not how your message should be copied.
 
 The full example is 78 lines, and every line is HL7.
+
+### ObjectScript or Python — no measurable difference
+
+Both are shipped and both are supported. Choose on what your team reads comfortably.
+
+Tested with two productions running concurrently in separate namespaces, one in each
+language, the same 50 messages copied into both at the same moment, selection caches
+warm, and a separate MCP server instance per namespace so neither waited on the other:
+
+| | Python | ObjectScript |
+|---|---|---|
+| 50 messages, file in to file out | 3.59 s | 3.65 s |
+| Difference | | 0.06 s, under 2% |
+
+Isolated to the two methods alone, 5000 iterations against a real HL7 message,
+ObjectScript is faster — by an amount that cannot be seen end to end:
+
+| Method | ObjectScript | Python |
+|---|---|---|
+| find candidates | 23.8 us | 30.3 us |
+| apply result | 28.6 us | 36.5 us |
+
+About 15 microseconds per message against roughly 80,000 of end-to-end cost, or
+under 0.02%. It would take around 65,000 messages to add up to one second.
+
+An earlier run had Python ahead by 1.6 s in every one of four rounds. Swapping the
+languages between the two namespaces collapsed the gap to 0.06 s, which showed the
+difference belonged to that pair of productions rather than to either language.
+Method and full numbers in [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 **Prefer Python?** Override `Candidates()` and `Apply()` instead of
 `FindCandidates()` and `ApplyResult()`, and write both entirely in Embedded Python.

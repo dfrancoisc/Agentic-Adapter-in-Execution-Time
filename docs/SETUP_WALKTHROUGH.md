@@ -120,9 +120,11 @@ appear in groups.
 
 | Setting | Example | Notes |
 |---|---|---|
-| `HTTPServer` | `terminology.internal` | Host only, no scheme, no path |
-| `HTTPPort` | `443` | |
-| `URL` | `/mcp/terminology` | The MCP endpoint path |
+| `ServerURL` | `https://terminology.internal/mcp` | The whole address, pasted from the vendor's documentation |
+
+That is the only connection setting most people need. It fills in `HTTPServer`,
+`HTTPPort` and `URL` for you and selects the default TLS configuration for an
+`https` address. Set those three by hand only if you need finer control.
 
 ### Security
 
@@ -142,11 +144,13 @@ refresh are handled by the platform.
 | Setting | Example | Notes |
 |---|---|---|
 | `ToolName` | `translate_code` | Used when the caller does not name a tool |
-| `AllowedTools` | `^(translate_code\|lookup_display)$` | Regular expression. Blank means only `ToolName` is callable |
+| `AllowedTools` | leave blank | Blank allows every tool the server offers |
 | `ResultPath` | `structuredContent.code` | Dotted path into the result, so callers get a scalar |
 
-`AllowedTools` is a security control. The MCP server decides what it offers; this
-decides what this interface is permitted to use.
+Leave `AllowedTools` blank. You do not know a server's tool names before you call it,
+and finding out is what the server is for. Fill it in only when you already know a
+catalogue and want this interface restricted — plain tool names, comma separated,
+with `*` as a wildcard. Not regular expressions.
 
 ### What happens when it fails
 
@@ -256,6 +260,6 @@ do ##class(Ens.Director).StartProduction("Demo.MCPProduction")
 | `Business dispatch name 'EnsLib.Testing.Service' is not registered to run` | Testing Enabled is off — step 3 |
 | `<CLASS DOES NOT EXIST>` on start | The production class was not created or not compiled. A production is a class, not just a configuration row |
 | Operation red on start | Endpoint unreachable, or `SSLConfig` missing for an https endpoint |
-| `tool not permitted by AllowedTools` | The tool is not in the allow-list. Blank allows only `ToolName` |
+| `tool not permitted by AllowedTools` | You set an allow-list that excludes it. Blank allows everything |
 | Empty result, no error | `ResultPath` does not match the response shape. Blank it to see the whole result, then narrow |
 | `IsError = 1` but the message succeeded | Correct behaviour. The tool ran and reported failure — a business outcome, not a broken interface |
