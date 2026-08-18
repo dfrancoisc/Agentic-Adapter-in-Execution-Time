@@ -84,7 +84,7 @@ Method Send(pBody As %String) As %String [ Internal ]
     try {
         set tReq = ##class(%Net.HttpRequest).%New()
         set tReq.ContentType = "application/json"
-        do tReq.SetHeader("Accept", "application/json")
+        do tReq.SetHeader("Accept", "application/json, text/event-stream")
         if ..SessionId '= "" { do tReq.SetHeader("Mcp-Session-Id", ..SessionId) }
         if ..ProtocolVersion '= "" { do tReq.SetHeader("MCP-Protocol-Version", ..ProtocolVersion) }
         if (..AuthType = "bearer") || (..AuthType = "header") {
@@ -249,6 +249,9 @@ Method rpc(method As %String, params, notify As %Boolean = 0) [ Internal, Langua
     if not raw:
         self.LastError = "empty response (HTTP %s)" % self.LastHttpCode
         return None
+
+    raw = self.unwrapSSE(raw)
+
     try:
         msg = json.loads(raw)
     except ValueError as e:
@@ -259,6 +262,21 @@ Method rpc(method As %String, params, notify As %Boolean = 0) [ Internal, Langua
         self.LastError = "MCP error %s: %s" % (err.get("code"), err.get("message"))
         return None
     return msg.get("result", {})
+}
+
+/// Streamable HTTP allows a server to answer either with plain JSON or with an SSE
+/// stream, and real servers pick SSE even when the request asks for JSON. Pull the
+/// JSON-RPC payload out of the data lines; pass anything else through untouched.
+Method unwrapSSE(raw As %String) As %String [ Internal, Language = python ]
+{
+    text = (raw or "").lstrip()
+    if not text.startswith("event:") and not text.startswith("data:"):
+        return raw
+    payload = []
+    for line in text.splitlines():
+        if line.startswith("data:"):
+            payload.append(line[5:].strip())
+    return "\n".join(payload) if payload else raw
 }
 
 /// Is this tool name allowed by configuration?

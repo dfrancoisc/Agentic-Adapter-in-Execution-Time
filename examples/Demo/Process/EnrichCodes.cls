@@ -65,7 +65,11 @@ Method ApplyResult(pMessage As EnsLib.HL7.Message, pCandidate As %DynamicObject,
 
     do pMessage.SetValueAt(tNewCode, i_":"_..CodeField)
     do pMessage.SetValueAt(tNewText, i_":"_..TextField)
-    do pMessage.SetValueAt(..TargetSystemLabel, i_":"_..SystemField)
+    ; blank TargetSystemLabel means the coding system does not change - the case
+    ; when a code is being validated and normalised rather than translated
+    if ..TargetSystemLabel '= "" {
+        do pMessage.SetValueAt(..TargetSystemLabel, i_":"_..SystemField)
+    }
 
     do pMessage.SetValueAt(pCandidate.value, i_":"_..AltCodeField)
     do pMessage.SetValueAt(pCandidate.text, i_":"_..AltTextField)
