@@ -57,8 +57,12 @@ ClassMethod collect(pNamespace As %String, pSearchKey As %String, pCount As %Int
             ; the portal filters as the user types
             if (pSearchKey '= "") && ($zconvert(tName, "U") '[ $zconvert(pSearchKey, "U")) continue
             set tCount = tCount + 1
-            ; show what the engineer needs to choose between, not just a name
-            set pResults(tCount) = $listbuild(tName, tRs.%Get("Provider"), tRs.%Get("Model"))
+            ; ONE column, deliberately. A multi-column $listbuild renders as raw list
+            ; delimiters in the new interoperability editor AND is stored verbatim as
+            ; the setting value, so picking "bedrock-default" saved the whole row and
+            ; the connection never resolved. The value must be exactly what the adapter
+            ; will look up.
+            set pResults(tCount) = tName
         }
     }
     catch {
