@@ -120,7 +120,7 @@ Stated because it has been a recurring source of confusion in review.
 
 | | |
 |---|---|
-| **Features** | Two ways to call an MCP server from a production — an outbound adapter for the production lane, a pair of functions for the transformation lane — plus optional model-based tool selection. Shipped, generic, installed by IPM |
+| **Features** | Four. In the production lane: MCP connectivity (an outbound adapter and its operation), model-chosen tools (an LLM adapter and a selector operation), and an extendable enrichment process. In the transformation lane: a pair of functions. Shipped, generic, installed by IPM |
 | **Customer configuration** | Which server, which tool, which credential, which field. Set in the Management Portal |
 | **Customer code** | Where the values live in their message and what to do with the answer |
 | **Examples** | Everything shipped under `Demo.*`. Not installed, not supported |

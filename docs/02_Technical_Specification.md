@@ -91,6 +91,9 @@ parameters.
 
 ## 4. Classes
 
+Grouped by feature: MCP connectivity, model-chosen tools, the enrichment process,
+the transformation functions, and shared plumbing.
+
 | Class | Type | Purpose |
 |---|---|---|
 | `Agentic.Adapter.MCP` | Outbound adapter | Connection, security, protocol, filtering, extraction |

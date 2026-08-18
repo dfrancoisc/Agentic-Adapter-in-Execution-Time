@@ -37,7 +37,7 @@ product. To be explicit:
 
 | | |
 |---|---|
-| **The features** | Two ways to call an MCP server from a production, plus optional model-based tool selection. Shipped in `Agentic.*`, installed by IPM, generic |
+| **The features** | Four: MCP connectivity, model-chosen tools, an extendable enrichment process, and functions for transformations. Shipped in `Agentic.*`, installed by IPM, generic |
 | **Your configuration** | Which server, which tool, which credential, which field of your message. Set in the Management Portal |
 | **Your code** | Where the values live in your message and what to do with the answer. Usually two methods, sometimes none |
 | **The examples** | Everything under `Demo.*` in `examples/`. Not installed, not supported. Copy and adapt |
@@ -46,53 +46,122 @@ Nothing in `Agentic.*` mentions HL7, SNOMED, ICD or FHIR outside of a comment.
 
 ---
 
-## The two features
+## The features
 
-They exist because IRIS has two different places you might want to call from, and
-those places have different vocabularies.
+Four features across two lanes, plus shared plumbing. The lanes exist because IRIS
+offers two places to call from and they have different vocabularies: an adapter has
+to hang off a business host, and a transformation is not one.
 
-### Feature 1 — the adapter, for productions
+### Production lane
 
-An adapter has to hang off a business host. That is what an adapter is. So in a
-production, the feature is an **outbound adapter** on a business operation.
+#### Feature 1 — MCP connectivity
 
 | Class | What it is |
 |---|---|
-| `Agentic.Adapter.MCP` | Outbound adapter. Speaks MCP, inherits TLS, credentials, OAuth 2 and proxy from `EnsLib.HTTP.OutboundAdapter` |
+| `Agentic.Adapter.MCP` | Outbound adapter. Speaks MCP; inherits TLS, credentials, OAuth 2 and proxy from `EnsLib.HTTP.OutboundAdapter` |
 | `Agentic.Adapter.Operation` | A ready-made business operation carrying it. Any operation of yours can carry it instead |
 | `Agentic.Adapter.Msg.ToolRequest` / `ToolResponse` | The messages you send and receive |
 
-You get: a **traced production message** for every call, retry, failover, alerting,
-and the full inherited security surface including OAuth 2.
+Configure a server on it and send it a `ToolRequest`. Every call becomes a traced
+production message with retry, failover and alerting.
 
-### Feature 2 — the functions, for transformations and rules
+`ToolRequest.Action` also does discovery: `list` returns the server's catalogue with
+input schemas, `describe` returns one tool. That is how you find out what to
+configure.
 
-A transformation is not a host, so no adapter shape is available there. The feature
-is a pair of **functions**.
+**Required.** This is the feature; everything else is optional around it.
+
+#### Feature 2 — model-chosen tools
+
+| Class | What it is |
+|---|---|
+| `Agentic.Adapter.LLM` | Outbound adapter for a model provider. Provider-neutral: `bedrock`, `anthropic`, `openai`, `custom` |
+| `Agentic.Adapter.SelectorOperation` | Business operation carrying it. Takes a goal and a catalogue, returns a tool name and the reason |
+| `Agentic.Adapter.Msg.SelectRequest` / `SelectResponse` | Its messages |
+
+For when you cannot know the right tool until the message arrives. The model reads
+the catalogue as text and answers with a tool name as text — it holds no credential
+for the MCP server and cannot invoke anything. `AllowedTools` is checked between its
+answer and the call.
+
+Two things make it affordable and auditable:
+
+- **Selections are cached**, keyed on whatever discriminates the case rather than on
+  the value. Measured over 50 messages: 2 model calls, 48 cache hits.
+- **Every selection is a traced message** carrying what the model was asked, what it
+  chose and why.
+
+`ConnectionName` points at a connection already configured in AI Settings, so the
+provider, model, endpoint and key are inherited and a key is rotated in one place.
+
+**Optional.** Nothing else in the module contacts a model. If you always know the
+tool, you never install a selector.
+
+#### Feature 3 — the enrichment process you extend
+
+`Agentic.Adapter.EnrichmentProcess` — an abstract business process that owns
+everything repetitive about calling a tool per value in a message:
+
+- fetching the catalogue when it is needed
+- choosing the tool, by `fixed` name, by `rule` from a value in the message, or by
+  `model` through the selector
+- invoking it, applying `ResultPath`, applying the error policy
+- caching selections, logging, and declaring its connections to the production
+  diagram
+
+You subclass it and implement two methods — where the values live in your message,
+and what to do with the answer:
+
+```objectscript
+Class My.Process Extends Agentic.Adapter.EnrichmentProcess
+{
+Method FindCandidates(pMessage As %Persistent, Output pSC As %Status) As %DynamicArray
+Method ApplyResult(pMessage As %Persistent, pCandidate As %DynamicObject, pResult As %DynamicObject) As %Status
+}
+```
+
+Or, in Python, `Candidates()` and `Apply()` — same hooks with the awkward parts
+removed. Measured: no performance difference between the two.
+
+It never touches your message itself; it only ever handles *candidates*, which are
+plain JSON objects you produced. That is why the same base serves HL7, FHIR, X12 or
+a class of your own.
+
+**Optional.** It fits one common shape — find several values, enrich each, forward
+the message. When your interface does something else, skip it: any process, BPL or
+operation can send a `ToolRequest` directly.
+
+### Transformation and rule lane
+
+#### Feature 4 — the functions
 
 | Function | What it is |
 |---|---|
 | `MCPCall(item, tool, argumentsJSON, resultPath, default)` | Call any tool with any arguments |
 | `MCPLookup(item, tool, argument, value, resultPath, default)` | Shorthand for one named argument in, one value out |
 
-Shipped in `Agentic.Adapter.Functions`. You get: a one-line call from inside a DTL
-or a routing rule, using the same TLS and credentials.
+Shipped in `Agentic.Adapter.Functions`. A one-line call from inside a DTL or a
+routing rule condition, naming a production item so TLS and credentials come from
+configuration rather than from the transformation.
 
-You do not get: a traced message, retry, failover, or OAuth 2.
+No traced message, no retry, no OAuth 2. See [Choosing a lane](#choosing-a-lane).
 
-### What both share
+### Shared
 
-`Agentic.Adapter.Protocol` holds the MCP wire protocol — envelope construction, SSE
-unwrapping, JSON-RPC errors, result extraction. Both features use it, so they cannot
-drift apart.
+| Class | What it is |
+|---|---|
+| `Agentic.Adapter.Protocol` | The MCP wire protocol with no transport. Both lanes use it, so they cannot drift |
+| `Agentic.Adapter.ContextSearch` | Populates the connection dropdown in settings from AI Settings |
+| `Agentic.Install` | Creates the shared database and maps it into every namespace. Run once |
 
-### Optional — model-chosen tools
+### At a glance
 
-`Agentic.Adapter.SelectorOperation` and `Agentic.Adapter.LLM` let a language model
-pick the tool from the server's catalogue when you cannot know it in advance. Only
-used if a process asks for it. Nothing else in the module contacts a model.
-
----
+| Feature | Lane | Required? | You get |
+|---|---|---|---|
+| MCP adapter + operation | Production | Yes | Traced calls, retry, failover, OAuth 2, discovery |
+| LLM adapter + selector | Production | No | A model picks the tool, cached and traced |
+| `EnrichmentProcess` | Production | No | Orchestration; you write two methods |
+| `MCPCall` / `MCPLookup` | DTL, rules | No | One-line call inside a transformation |
 
 ## Choosing a lane
 
@@ -223,9 +292,8 @@ and where the answer sits in the result.
 
 **1.** Configure the MCP item as above.
 
-**2.** Write a business process that calls it, or subclass the one provided.
-`Agentic.Adapter.EnrichmentProcess` handles fetching the catalogue, choosing a tool,
-invoking it, caching and error policy. You implement two methods:
+**2.** Write a business process that calls it, or subclass
+`Agentic.Adapter.EnrichmentProcess` (Feature 3) and implement two methods:
 
 ```objectscript
 Class My.Process Extends Agentic.Adapter.EnrichmentProcess
