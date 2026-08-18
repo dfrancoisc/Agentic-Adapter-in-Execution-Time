@@ -291,18 +291,78 @@ because `AllowedTools` is `^translate_code$`.
 5. Runtime is now deterministic. The same message produces the same call, every
    time, with no model involved and nothing to pay per message.
 
+## Choosing a tool at runtime
+
+Three ways, in increasing order of cost. Use the cheapest one that answers the
+question.
+
+| Mode | How the tool is chosen | Cost | Deterministic |
+|---|---|---|---|
+| fixed | The MCP item's configured `ToolName` | none | yes |
+| rule | A value in the message maps to a tool | none | yes |
+| model | A model picks from the server's catalog | tokens, latency | no |
+
+Rule mode deserves more attention than it usually gets. An HL7 CWE field names its
+own coding system in the third component — `I10`, `LN`, `SCT` — so the message
+already says which translator it needs. A model asked to decide that is re-deriving
+on every message something the data states outright.
+
+Model mode is the escape hatch: open intent, unfamiliar servers, or catalogs that
+change under you.
+
+### The selector
+
+`Agentic.Adapter.SelectorOperation` is the agentic layer, and it is an outbound host
+like any other. That is deliberate — it gets its own credentials, its own timeouts,
+and every selection becomes a traced message. When a selection later looks wrong,
+the trace holds what the model was asked, what it answered, and why.
+
+It selects a tool. It does not call one, and it never sees a whole clinical message
+— only the goal, the catalog, and whichever discriminating fields the caller sends.
+
+`Agentic.Adapter.LLM` is its adapter: provider-neutral (`anthropic`, `openai`, or
+`custom` wire format) and, like the MCP adapter, extending
+`EnsLib.HTTP.OutboundAdapter` so TLS, credentials and OAuth 2 are inherited rather
+than reimplemented.
+
+### Caching is what makes model mode affordable
+
+A selection is stable. Which tool translates ICD does not depend on which ICD code
+it is. So the decision is cached, and the cache key is the caller's to choose:
+
+```objectscript
+set tReq.CacheKey = ..Goal_"|"_pSystem     ; key on the coding system, not the code
+```
+
+Get this wrong and the cost is invisible but large. Keying on the code means a model
+call per distinct code — thousands of paid decisions answering one question. Keying
+on the coding system means one call per system, ever. Measured on four messages
+across two coding systems:
+
+```
+#85  translate_icd    fromCache=0  tokens=359     first I10  - model consulted
+#91  translate_icd    fromCache=1  tokens=[]      second I10 - cached
+#77  translate_loinc  fromCache=0  tokens=351     first LN   - model consulted
+```
+
+Two model calls. The same two would serve four million messages.
+
+`SelectRequest.CacheKey` blank falls back to a derived key covering the goal, the
+catalog and every short scalar in the context — safe, but less efficient than a
+caller who knows what actually discriminates. `ClearCache()` after a server's
+catalog changes.
+
 ### Is there a language model anywhere in this?
 
 **No.** The adapter calls the tool it is told to call. Nothing in this module
 configures, contacts, or depends on a language model, and there is no LLM in any of
 the example productions.
 
-Runtime tool selection — hand the catalog and a goal to a model and let it choose
-per message — is a real capability and a real build, described as Mode B in
-[docs/PRD.md](docs/PRD.md). It would need a model configured somewhere in the
-production, credentials, and caps on iterations, latency and cost, because a model
-choosing per message can choose differently on the next one. The adapter is the
-substrate that work would sit on, unchanged.
+Only if you configure one. `Agentic.Adapter.SelectorOperation` exists and works, but
+it is used solely when a process sets `SelectionMode` to `model`, and it needs an
+endpoint and credentials configured on its adapter like any other outbound host.
+The MCP adapter itself never contacts a model, and the shipped example runs in rule
+mode with no model in the path at all.
 
 ## Worked example
 
